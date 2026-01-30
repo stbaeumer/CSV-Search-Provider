@@ -1,0 +1,15 @@
+{
+  "name": "CSV-Search-Provider",
+  "description": "Durchsuche CSV- und TXT-Dateien zeilenweise in der GNOME Suche.",
+  "url": "https://github.com/stbaeumer/csv-search-provider",
+  "uuid": "csv-search-provider@stbaeumer.github.com",
+  "shell-version": ["48", "49"],
+  "settings-schema": "org.gnome.shell.extensions.csv-search-provider",
+  "gettext-domain": "csv-search-provider",
+  "search-provider": true,
+  "shell-search-provider": true,
+  "donations": {
+    "github": "stbaeumer"
+  },
+  "version": 1
+}

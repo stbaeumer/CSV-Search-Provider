@@ -1,0 +1,72 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 22:52+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: prefs.js:21
+msgid "Search folders in"
+msgstr ""
+
+#: prefs.js:25
+msgid "Choose"
+msgstr ""
+
+#: prefs.js:36 prefs.js:83
+msgid "No folder selected"
+msgstr ""
+
+#: prefs.js:50
+msgid "Select Search Folder"
+msgstr ""
+
+#: prefs.js:56
+msgid "Cancel"
+msgstr ""
+
+#: prefs.js:57
+msgid "Select"
+msgstr ""
+
+#: prefs.js:87
+msgid "App ID to run with selected folder"
+msgstr ""
+
+#: prefs.js:111
+msgid "Application not found. Check app ID guide below."
+msgstr ""
+
+#: prefs.js:133
+msgid ""
+"App ID is filename of .desktop files in:\n"
+"/usr/share/applications/\n"
+"/var/lib/flatpak/exports/share/applications/\n"
+"~/.local/share/applications/\n"
+"\n"
+"Use the Pins app to create app for custom script."
+msgstr ""
+
+#: prefs.js:140
+msgid "Hinweise zur Nutzung:"
+msgstr ""
+
+#: prefs.js:141
+msgid "1. Wähle einen Ordner aus, in dem deine CSV- oder TXT-Dateien liegen."
+msgstr ""
+
+#: prefs.js:142
+msgid "2. Lege dort eine oder mehrere CSV/TXT-Dateien ab. Jede Zeile muss zwei Spalten enthalten: Spalte 1 = Suchtext, Spalte 2 = URL (getrennt durch |). Beim Klick auf ein Suchergebnis wird die URL geöffnet."
+msgstr ""
