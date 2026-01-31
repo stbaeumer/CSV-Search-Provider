@@ -19,7 +19,7 @@ Now search for John, to get 'John Doe'. Click ENTER to jump to 'https://teams.mi
 @workspace Ich habe eine voll funktionsfähge Gnome Remmina Search extension aus github geklont und hier hineingelegt. Im Moment sucht die Extension nach gespeicherten Remmina-Verbindungen. 
 Baue die App wie folgt um:
 
-Im Moment heißt die App Remmina Search Provider. Das soll konsquent umbenannt werden nach csv-search-provider. 
+Im Moment heißt die App CSV Search Provider. Das soll konsquent umbenannt werden nach csv-search-provider. 
 
 Das soll die neue App tun:
 Es sollen alle txt und csv-Dateien im Ordner /home/stefan/.csv-search-provider Zeile für Zeile indiziert werden. Jede Zeile in jeder gefundenen Datei hat eine oder zwei oder drei Spalten. Beispiel "Meine_Termine.txt":
