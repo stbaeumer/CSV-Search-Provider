@@ -16,19 +16,24 @@ Now search for John, to get 'John Doe'. Click ENTER to jump to 'https://teams.mi
 
 
 
+@workspace Ich habe eine voll funktionsfähge Gnome Remmina Search extension aus github geklont und hier hineingelegt. Im Moment sucht die Extension nach gespeicherten Remmina-Verbindungen. 
+Baue die App wie folgt um:
 
-@workspace Die App habe ich mir als Vorlage heruntergeladen. Sie durchsucht im Moment Ordner im Dateisystem. Jetzt soll die Suchlogik (in extensions.js) wie folgt umgebaut werden:
+Im Moment heißt die App Remmina Search Provider. Das soll konsquent umbenannt werden nach csv-search-provider. 
 
-Es sollen alle txt und csv-Dateien im Ordner /home/stefan/.csv-search-provider Zeile für Zeile indiziert werden. Jede Zeile in jeder gefundenen Datei hat zwei Spalten. Beispiel "Meine_Termine.txt":
+Das soll die neue App tun:
+Es sollen alle txt und csv-Dateien im Ordner /home/stefan/.csv-search-provider Zeile für Zeile indiziert werden. Jede Zeile in jeder gefundenen Datei hat eine oder zwei oder drei Spalten. Beispiel "Meine_Termine.txt":
 
-31.12.2026, 20:00 Silvester|https://my-calender-online.de
-01.01.2027 New Year|https://my-calender-online.de
+31.12.2026, 20:00 Silvester|https://my-calender-online.de|icon.png
+01.01.2027, New Year|https://my-calender-online.de|icon2.png
 
 Wenn der Anwender nun in der Gnome-Shell-Suche Silvester eingibt, dann soll als Suchergebnis Spalte 1 "31.12.2026, 20:00 Silvester" angezeigt werden. Wenn der Anwender das Suchergebnis klickt, soll der URL in der zweiten Spalte geöffnet werden.
 
-Der Container um die Ergebnisse aus Termine.txt soll den Namen "Meine_Termine" bekommen. Also den Dateinamen ohne Dateiendung. Unterstriche im Dateinamen werden zu Leerzeichen.
+In Spalte 3 steht optional ein Icon, was angezeigt werden soll.
+Wenn Spalte3 kein Icon hat, soll das Standard-Icon im root-Pfad (icon.png) zu jedem Treffer angezeigt werden. Die Icons liegen ebenfalls in .csv-search-provider. Wenn ei icon fehlt, nimm ebenfalls das Standardicon aus root.
 
-So wie ich das verstehe, ist die Suchlogik in extensions.js. Also bitte entsprechend vorsichtig bei der Bearbeitung anderer Dateien, da das Extension-handling wohl sehr sensibel ist.
+Ich habe bereits ein csv-search-provider.sh, das installiert und deinstalliert und debuggt. Passe das auch entsprechend an, falls nötig.
+
 
 
 

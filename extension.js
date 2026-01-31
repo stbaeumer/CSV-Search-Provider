@@ -1,106 +1,117 @@
-import Gio from 'gi://Gio'
-import GLib from 'gi://GLib'
-import { overview } from 'resource:///org/gnome/shell/ui/main.js'
-import Shell from 'gi://Shell'
-import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js'
+/* -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*- */
+/**
+ * CSV Search Provider für GNOME Shell
+ *
+ * Copyright (c) 2024 Stefan Bäumer
+ * Lizenz: GPLv3
+ */
 
-class CsvSearchProvider {
-  constructor(extension) {
-    this.extension = extension
-    this.entries = this.#indexFiles()
-  }
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
+import St from 'gi://St';
+import * as Util from 'resource:///org/gnome/shell/misc/util.js';
+import * as Search from 'resource:///org/gnome/shell/ui/search.js';
 
-  #getSearchFolder() {
-    // Hole den vom Nutzer gewählten Ordner aus den Einstellungen
-    let settings = this.extension.getSettings()
-    let folder = settings.get_string('root')
-    if (!folder) {
-      // Fallback auf Standardordner
-      folder = GLib.build_filenamev([GLib.get_home_dir(), '.csv-search-provider'])
-    }
-    return folder
-  }
+const SEARCH_DIR = GLib.build_filenamev([GLib.get_home_dir(), '.csv-search-provider']);
+const DEFAULT_ICON = GLib.build_filenamev([SEARCH_DIR, 'icon.png']);
+let provider = null;
 
-  #indexFiles() {
-    let entries = []
-    let dir = Gio.File.new_for_path(this.#getSearchFolder())
-    let enumerator
-    try {
-      enumerator = dir.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null)
-      let info
-      while ((info = enumerator.next_file(null)) !== null) {
-        let name = info.get_name()
-        if (
-          info.get_file_type() === Gio.FileType.REGULAR &&
-          (name.endsWith('.txt') || name.endsWith('.csv'))
-        ) {
-          let file = dir.get_child(name)
-          let [ok, contents] = file.load_contents(null)
-          if (ok) {
-            let lines = imports.byteArray.toString(contents).split('\n')
-            let container = name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
+function readCsvFiles() {
+    let sessions = [];
+    let dir = Gio.file_new_for_path(SEARCH_DIR);
+    if (!dir.query_exists(null)) return sessions;
+
+    let enumerator = dir.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+    let fileInfo;
+    while ((fileInfo = enumerator.next_file(null)) !== null) {
+        let name = fileInfo.get_name();
+        if (!name.match(/\.(csv|txt)$/i)) continue;
+        let filePath = GLib.build_filenamev([SEARCH_DIR, name]);
+        try {
+            let content = GLib.file_get_contents(filePath)[1].toString();
+            let lines = content.split('\n');
             for (let line of lines) {
-              let [title, url] = line.split('|')
-              if (title && url) {
-                entries.push({
-                  container,
-                  title: title.trim(),
-                  url: url.trim()
-                })
-              }
+                if (line.trim() === '') continue;
+                let [col1, col2, col3] = line.split('|');
+                if (!col1 || !col2) continue;
+                sessions.push({
+                    display: col1.trim(),
+                    url: col2.trim(),
+                    icon: col3 ? GLib.build_filenamev([SEARCH_DIR, col3.trim()]) : DEFAULT_ICON
+                });
             }
-          }
+        } catch (e) {
+            log(`Fehler beim Lesen von ${filePath}: ${e}`);
         }
-      }
-      enumerator.close(null)
-    } catch (e) {
-      log('CSV-Search-Provider Fehler: ' + e)
     }
-    return entries
-  }
-
-  getInitialResultSet(terms) {
-    return this.getSubsearchResultSet(this.entries, terms)
-  }
-
-  getSubsearchResultSet(previousResults, terms) {
-    let results = previousResults
-    for (let term of terms) {
-      let lower = term.toLowerCase()
-      results = results.filter(entry => entry.title.toLowerCase().includes(lower))
-    }
-    return results
-  }
-
-  getResultMetas(results) {
-    return results.map(entry => ({
-      id: entry.url,
-      name: entry.title,
-      description: entry.container
-    }))
-  }
-
-  activateResult(url) {
-    try {
-      Gio.AppInfo.launch_default_for_uri(url, null)
-    } catch (e) {
-      log('CSV-Search-Provider Fehler beim Öffnen der URL: ' + e)
-    }
-  }
+    return sessions;
 }
 
-export default class CsvSearchProviderExtension extends Extension {
-  #provider = null
-
-  enable() {
-    this.#provider = new CsvSearchProvider(this)
-    overview.searchController.addProvider(this.#provider)
-  }
-
-  disable() {
-    if (this.#provider) {
-      overview.searchController.removeProvider(this.#provider)
-      this.#provider = null
+var CsvSearchProvider = class {
+    constructor() {
+        this.id = 'csv-search-provider';
+        this._sessions = readCsvFiles();
+        this._monitor = Gio.file_new_for_path(SEARCH_DIR)
+            .monitor_directory(Gio.FileMonitorFlags.NONE, null);
+        this._monitor.connect('changed', () => {
+            this._sessions = readCsvFiles();
+        });
     }
-  }
+
+    getInitialResultSet(terms, cancellable) {
+        let results = [];
+        let lowerTerms = terms.map(t => t.toLowerCase());
+        for (let session of this._sessions) {
+            if (lowerTerms.every(term => session.display.toLowerCase().includes(term))) {
+                results.push(session);
+            }
+        }
+        return results.map((s, i) => i.toString());
+    }
+
+    getResultMetas(ids, cancellable) {
+        return ids.map(id => {
+            let s = this._sessions[parseInt(id)];
+            return {
+                id: id,
+                name: s.display,
+                description: s.url,
+                createIcon: size => {
+                    let iconPath = Gio.file_new_for_path(s.icon);
+                    let icon = St.TextureCache.get_default().load_uri_async(iconPath.get_uri(), size, size);
+                    let box = new St.BoxLayout();
+                    box.add_child(icon);
+                    return box;
+                }
+            };
+        });
+    }
+
+    activateResult(id, terms) {
+        let s = this._sessions[parseInt(id)];
+        if (s && s.url) {
+            Util.spawn(['xdg-open', s.url]);
+        }
+        Main.overview.hide();
+    }
+
+    getSubsearchResultSet(results, terms, cancellable) {
+        return this.getInitialResultSet(terms, cancellable);
+    }
+};
+
+export default class CsvSearchProviderExtension {
+    enable() {
+        if (!provider) {
+            provider = new CsvSearchProvider();
+            Main.overview.searchController.addProvider(provider);
+        }
+    }
+    disable() {
+        if (provider) {
+            Main.overview.searchController.removeProvider(provider);
+            provider = null;
+        }
+    }
 }
