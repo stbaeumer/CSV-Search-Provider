@@ -1,18 +1,39 @@
-# Search CSV
+# CSV Search Provider
 
-Search CSV lässt dich Inhalte von *.txt und *.csv Dateien in einem bestimmten Ordner zeilenweise durchsuchen.
+CSV Search Provider durchsucht CSV-Dateien und zeigt die Ergebnisse in der GNOME Shell Suche an.
 
-Let's say the content of appointments.txt is this:
+## CSV-Format
 
-31.12.2026, 20:00 Silvester|https://my-calender-online.de
-01.01.2027 New Year|https://my-calender-online.de
+Die CSV-Datei muss mit Semikolon (`;`) getrennt sein und hat **4 Spalten**:
 
-And maybe the content of another file namend 'chat.csv' is this:
+```
+Name;Beschreibung;Wert;Icon
+```
 
-Max Mustermann|https://teams.microsoft.com/l/chat/0/0?users=max.mustermann@firma.de
-John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@firma.de
+- **Spalte 1 (Name)**: Der Anzeigetitel des Eintrags (wird in der Suche angezeigt)
+- **Spalte 2 (Beschreibung)**: Zusätzliche Beschreibung (wird unter dem Titel angezeigt)
+- **Spalte 3 (Wert)**: URL, Dateipfad oder Text, der geöffnet/kopiert werden soll
+- **Spalte 4 (Icon)**: Icon-Dateiname aus dem `icons`-Ordner (z.B. `web.svg`). Optional - wenn leer oder nicht vorhanden, wird `search-icon.svg` verwendet.
 
-Now search for John, to get 'John Doe'. Click ENTER to jump to 'https://teams.microsoft.com/l/chat/0/0?users=john.doe@firma.de'.
+**Kommentare**: Zeilen, die mit `#` beginnen, werden ignoriert.
+
+### Beispiel
+
+```csv
+Google;Suche im Web;https://www.google.de;web.svg
+Config Datei;Öffnet eine Konfigurationsdatei;/home/user/.config/app/config;file.svg
+Token;Kopiert einen Token in die Zwischenablage;ABC-123-XYZ;copy.svg
+# Das ist ein Kommentar
+Backup Script;Startet ein Backup Script;/home/user/bin/backup.sh;exec.svg
+Ohne Icon;Kein Icon angegeben;https://example.com;
+```
+
+### Verhalten
+
+Die Extension erkennt automatisch, was mit dem Wert passieren soll:
+- URLs (beginnen mit `http://` oder `https://`): Werden im Browser geöffnet
+- Dateipfade (beginnen mit `/` oder `~`): Werden mit der Standard-App geöffnet
+- Alles andere: Wird in die Zwischenablage kopiert
 
 
 

@@ -120,6 +120,7 @@ class CsvSearchProvider {
 
         let file = Gio.File.new_for_path(iconPath);
         if (!file.query_exists(null)) {
+            log(`CSV-Search-Provider: Icon nicht gefunden: ${iconPath}, nutze Default`);
             file = Gio.File.new_for_path(`${iconsDir}/${defaultIcon}`);
         }
 
