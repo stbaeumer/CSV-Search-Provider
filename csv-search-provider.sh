@@ -20,6 +20,8 @@ function install_extension() {
   gnome-extensions disable "$EXT_ID" 2>/dev/null
   gnome-extensions enable "$EXT_ID"
   echo "Extension installiert und aktiviert."
+  echo "Melde GNOME-Sitzung ab ..."
+  gnome-session-quit --no-prompt
 }
 
 function uninstall_extension() {
@@ -28,6 +30,8 @@ function uninstall_extension() {
   gnome-extensions uninstall "$EXT_ID"
   rm -rf "$EXT_DEST"
   echo "Extension deinstalliert."
+  echo "Melde GNOME-Sitzung ab ..."
+  gnome-session-quit --no-prompt
 }
 
 function debug_extension() {
@@ -56,17 +60,14 @@ function debug_extension() {
   echo "--- gnome-shell --version ---"
   gnome-shell --version
   echo
-  echo "--- gnome-extensions list ---"
-  gnome-extensions list
+  echo "--- Check if extension is loaded ---"
+  gnome-extensions list | grep -q csv-search-provider || echo "nicht installiert"
   echo
-  echo "--- gnome-extensions info ---"
+  echo "--- Check extension status ---"
   gnome-extensions info csv-search-provider@stbaeumer.github.com
   echo
   echo "--- GNOME Shell Log (journalctl /usr/bin/gnome-shell -f, STRG+C zum Beenden) ---"
-  journalctl /usr/bin/gnome-shell -f
-
-
-
+  journalctl /usr/bin/gnome-shell -f | grep -i error | grep -i csv
 }
 
 case "$1" in

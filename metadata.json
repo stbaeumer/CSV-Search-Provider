@@ -3,6 +3,6 @@
     "uuid": "csv-search-provider@stbaeumer.github.com",
     "name": "CSV Search Provider",
     "url": "https://github.com/stbaeumer/csv-search-provider/",
-    "description": "Search for Remmina Remote Desktop Connections\n\nEasily search for and launch connections to remote machines by name and protocol.",
-    "version": 2026.01.31-102027
+    "description": "Search for rows in CSV files in ~/.csv-search-provider\n\n....",
+    "version": 1
 }

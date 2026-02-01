@@ -2,7 +2,7 @@
 /**
  * CSV Search Provider for GNOME Shell
  *
- * Copyright (c) 2026 <baeumer@posteo.de>
+ * Copyright (c) 2020 Stefan Bäumer <baeumer@posteo.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ import St from 'gi://St';
 import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 import * as Search from 'resource:///org/gnome/shell/ui/search.js';
 
-let remminaApp = null;
+let csvApp = null;
 
 const emblems = {
     'NX': ['remmina-nx', 'org.remmina.Remmina-nx'],
@@ -39,7 +39,7 @@ const emblems = {
 };
 let provider = null;
 
-var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
+var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
     _getDataDirPaths() {
         // remmina stores its configuration in ~/.config/remmina/remmina.pref -
         // this may also be within a snap -
@@ -80,20 +80,19 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
                     console.warn("Failed to load remmina pref file: " + pref_file_path + ": " + e.toString());
                 }
             }
-
         }
         , this);
         return paths;
     }
 
-    _monitorRemminaDir(path) {
+    _monitorCsvDir(path) {
         let dir = Gio.file_new_for_path(path);
         let monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
         monitor.connect('changed', (monitor, file, other_file, type) => {
             this._onMonitorChanged(monitor, file, other_file, type);
         });
         /* save a reference so we can cancel it on disable */
-        this._remminaMonitors.push(monitor);
+        this._csvMonitors.push(monitor);
 
         this._listDirAsync(dir, (files) => {
             files.map((f) => {
@@ -116,11 +115,11 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
             this.theme.append_search_path(snapIconPath);
         }
         this._sessions = [];
-        this._remminaMonitors = [];
+        this._csvMonitors = [];
 
         let paths = this._getDataDirPaths();
         for (let i = 0; i < paths.length; i++) {
-            this._monitorRemminaDir(paths[i]);
+            this._monitorCsvDir(paths[i]);
         }
     }
 
@@ -163,7 +162,7 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
                 }
                 this._sessions.push(session);
             } else {
-                console.warn("Remmina session missing name in file: " + path);
+                console.warn("CSV session missing name in file: " + path);
             }
                 keyfile = null;
         } else if (type == Gio.FileMonitorEvent.DELETED) {
@@ -205,7 +204,7 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
         metaInfo.createIcon = (size) => {
             let box = new St.BoxLayout();
             let icon = null;
-            icon = remminaApp.create_icon_texture(size);
+            icon = csvApp.create_icon_texture(size);
             box.add_child(icon);
             if (metaInfo.protocol in emblems) {
                 // remmina emblems are fixed size of 22 pixels
@@ -277,13 +276,13 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
     }
 
     activateResult(id, terms) {
-        if (remminaApp) {
-            remminaApp.app_info.launch([Gio.file_new_for_path(id)], null);
+        if (csvApp) {
+            csvApp.app_info.launch([Gio.file_new_for_path(id)], null);
         } else {
             Util.spawn(['remmina', '-c', id]);
         }
         // specifically hide the overview -
-        // https://github.com/stbaeumer/csv-search-provider/issues/19
+        // https://github.com/stbaeumer/csv- search-provider/issues/19
         Main.overview.hide();
     }
 
@@ -320,19 +319,19 @@ var RemminaSearchProvider = class RemminaSearchProvider_SearchProvider {
     }
 };
 
-export default class RemminaSearchProviderExtension {
+export default class CsvSearchProviderExtension {
     enable () {
-        if (!remminaApp) {
+        if (!csvApp) {
             // desktop id changed in recent releases and make sure to include
             // snap/flatpak ids too
             let ids = ["org.remmina.Remmina", "remmina_remmina", "remmina", "remmina-file"];
             for (let i = 0; i < ids.length; i++) {
-                remminaApp = Shell.AppSystem.get_default().lookup_app(ids[i] + ".desktop");
-                if (remminaApp) {
+                csvApp = Shell.AppSystem.get_default().lookup_app(ids[i] + ".desktop");
+                if (csvApp) {
                     break;
                 }
             }
-            if (!remminaApp) {
+            if (!csvApp) {
                 console.warn("Failed to find remmina application");
                 let installed = Shell.AppSystem.get_default().get_installed();
                 installed.forEach((app) => {
@@ -343,8 +342,8 @@ export default class RemminaSearchProviderExtension {
         }
         // only create the provider if remmina app is found otherwise we can't
         // show icons or launch remmina so there is no point
-        if (!provider && remminaApp) {
-            provider = new RemminaSearchProvider();
+        if (!provider && csvApp) {
+            provider = new CsvSearchProvider();
             Main.overview.searchController.addProvider(provider);
         }
     }
@@ -352,14 +351,14 @@ export default class RemminaSearchProviderExtension {
     disable() {
         if (provider) {
             Main.overview.searchController.removeProvider(provider);
-            for (let i = 0; i < provider._remminaMonitors.length; i++) {
-                provider._remminaMonitors[i].cancel();
-                provider._remminaMonitors[i] = null;
+            for (let i = 0; i < provider._csvMonitors.length; i++) {
+                provider._csvMonitors[i].cancel();
+                provider._csvMonitors[i] = null;
             }
             provider = null;
         }
-        if (remminaApp) {
-            remminaApp = null;
+        if (csvApp) {
+            csvApp = null;
         }
     }
 

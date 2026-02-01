@@ -16,7 +16,7 @@ Now search for John, to get 'John Doe'. Click ENTER to jump to 'https://teams.mi
 
 
 
-@workspace Ich habe eine voll funktionsfähge Gnome Remmina Search extension aus github geklont und hier hineingelegt. Im Moment sucht die Extension nach gespeicherten Remmina-Verbindungen. 
+@workspace Ich habe eine voll funktionsfähge Gnome CSV Search extension aus github geklont und hier hineingelegt. Im Moment sucht die Extension nach gespeicherten Remmina-Verbindungen. 
 Baue die App wie folgt um:
 
 Im Moment heißt die App CSV Search Provider. Das soll konsquent umbenannt werden nach csv-search-provider. 
