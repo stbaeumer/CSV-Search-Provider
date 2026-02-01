@@ -1,207 +1,277 @@
-/* -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*- */
-/**
- * CSV Search Provider for GNOME Shell (Downloads CSV)
- * Extended Debug + Icon Fix
- */
-
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import Shell from 'gi://Shell';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
-import * as Util from 'resource:///org/gnome/shell/misc/util.js';
-import * as Search from 'resource:///org/gnome/shell/ui/search.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
-let provider = null;
+class CsvSearchProvider {
+    constructor(extension) {
+        this._extension = extension;
+        this.id = extension.uuid;
 
-const emblems = {
-    'NX': ['remmina-nx', 'org.remmina.Remmina-nx'],
-    'RDP': ['remmina-rdp', 'org.remmina.Remmina-rdp'],
-    'SFTP': ['remmina-sftp', 'org.remmina.SFTP'],
-    'SPICE': ['remmina-spice', 'org.remmina.SPICE'],
-    'SSH': ['remmina-ssh', 'org.remmina.SSH', 'gnome-terminal', 'x-terminal'],
-    'VNC': ['remmina-vnc', 'org.remmina.VNC'],
-    'XDMCP': ['remmina-xdmcp', 'org.remmina.XDMCP']
-};
-
-var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
-    constructor() {
-        log("[CSV] Initializing CSV Search Provider");
-        this._sessions = [];
-        this._csvMonitors = [];
-        this.theme = new St.IconTheme();
-
-        const downloadsDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD);
-        if (!downloadsDir) {
-            log("[CSV] Download-Verzeichnis konnte nicht ermittelt werden.");
-            return;
-        }
-
-        log("[CSV] Monitoring CSV directory: " + downloadsDir);
-        this._monitorCsvDir(downloadsDir);
+        this._entries = [];   // komplette CSV-Daten
     }
 
-    _monitorCsvDir(path) {
-        let dir = Gio.file_new_for_path(path);
-        let monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
-        monitor.connect('changed', (monitor, file, other_file, type) => {
-            this._onMonitorChanged(monitor, file, other_file, type);
-        });
-        this._csvMonitors.push(monitor);
-
-        this._listDirAsync(dir, (files) => {
-            files.forEach((f) => {
-                let name = f.get_name();
-                if (name.toLowerCase().endsWith('.csv')) {
-                    log(`[CSV][DEBUG] Initial load CSV: ${name}`);
-                    let file_path = GLib.build_filenamev([path, name]);
-                    let file = Gio.file_new_for_path(file_path);
-                    this._parseCsvFile(file);
-                }
-            });
-
-            log(`[CSV][DEBUG] Initial scan complete. Gesamt Treffer: ${this._sessions.length}`);
-        });
+    enable() {
+        this._loadCsv();
+        Main.overview.searchController.addProvider(this);
     }
 
-    _onMonitorChanged(monitor, file, other_file, type) {
-        let path = file.get_path();
-        if (type === Gio.FileMonitorEvent.CREATED ||
-            type === Gio.FileMonitorEvent.CHANGED ||
-            type === Gio.FileMonitorEvent.CHANGES_DONE_HINT) {
-            if (path.toLowerCase().endsWith('.csv')) {
-                log(`[CSV][DEBUG] CSV geändert/neu: ${path}`);
-                this._parseCsvFile(file);
-                log(`[CSV][DEBUG] Nach Änderung: Gesamt Treffer = ${this._sessions.length}`);
-            }
-        } else if (type === Gio.FileMonitorEvent.DELETED) {
-            this._sessions = this._sessions.filter(s => s.file !== path);
-            log(`[CSV][DEBUG] CSV gelöscht: ${path}, Gesamt Treffer = ${this._sessions.length}`);
-        }
+    disable() {
+        Main.overview.searchController.removeProvider(this);
     }
 
-    _parseCsvFile(file) {
-        let path = file.get_path();
+    //
+    // CSV LADEN
+    //
+    _loadCsv() {
+        this._entries = [];
+
+        const csvPath = `${this._extension.path}/data/data.csv`;
+        const file = Gio.File.new_for_path(csvPath);
+
         try {
-            let [ok, contents] = file.load_contents(null);
-            if (!ok) return;
+            const [, contents] = file.load_contents(null);
+            const text = new TextDecoder().decode(contents);
 
-            let text = imports.byteArray.toString(contents);
-            let lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-            log(`[CSV][DEBUG] Datei gefunden: ${path}, Zeilen: ${lines.length}`);
+            const lines = text
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0 && !l.startsWith('#'));
 
-            let newSessions = [];
-            lines.forEach((line, index) => {
-                let parts = line.match(/(".*?"|[^|;]+)(?=\||;|$)/g);
-                if (!parts || parts.length < 3) return;
+            for (const line of lines) {
+                const parts = line.split(';');
 
-                let name = parts[0].replace(/^"|"$/g, '').trim();
-                let url = parts[1].replace(/^"|"$/g, '').trim();
-                let iconKey = parts[2].replace(/^"|"$/g, '').trim();
-                if (!emblems[iconKey]) iconKey = Object.keys(emblems)[0];
+                const entry = {
+                    name: (parts[0] || '').trim(),
+                    description: (parts[1] || '').trim(),
+                    value: (parts[2] || '').trim(),
+                    category: (parts[3] || '').trim().toLowerCase(),
+                };
 
-                let sessionId = `${path}:${index}`;
-                newSessions.push({ id: sessionId, name, url, iconKey, file: path });
-                log(`[CSV][DEBUG] Zeile ${index}: '${name}' -> '${url}', icon='${iconKey}'`);
-            });
-
-            this._sessions = this._sessions.filter(s => s.file !== path);
-            this._sessions.push(...newSessions);
+                if (entry.name)
+                    this._entries.push(entry);
+            }
         } catch (e) {
-            log("[CSV][DEBUG] Fehler beim Lesen der CSV: " + path + " : " + e.toString());
+            log(`CSV-Search-Provider: Fehler beim Laden der CSV (${csvPath}): ${e}`);
         }
     }
 
-    _listDirAsync(file, callback) {
-        let allFiles = [];
-        file.enumerate_children_async('standard::name,standard::type',
-                                      Gio.FileQueryInfoFlags.NONE,
-                                      GLib.PRIORITY_LOW, null,
-                                      function (obj, res) {
-                                          let enumerator = obj.enumerate_children_finish(res);
-                                          function onNextFileComplete(obj, res) {
-                                              let files = obj.next_files_finish(res);
-                                              if (files.length) {
-                                                  allFiles = allFiles.concat(files);
-                                                  enumerator.next_files_async(100, GLib.PRIORITY_LOW, null, onNextFileComplete);
-                                              } else {
-                                                  enumerator.close(null);
-                                                  callback(allFiles);
-                                              }
-                                          }
-                                          enumerator.next_files_async(100, GLib.PRIORITY_LOW, null, onNextFileComplete);
-                                      });
+    //
+    // SUCHE
+    //
+    _matchEntry(entry, query) {
+        const q = query.toLowerCase();
+        return (
+            entry.name.toLowerCase().includes(q) ||
+            entry.description.toLowerCase().includes(q) ||
+            entry.value.toLowerCase().includes(q)
+        );
     }
 
-    createResultObject(metaInfo, terms) {
-        metaInfo.createIcon = (size) => {
-            let box = new St.BoxLayout();
-            let names = emblems[metaInfo.iconKey] || emblems[Object.keys(emblems)[0]];
-            let name = names[0];
-            let emblem = new St.Icon({ gicon: new Gio.ThemedIcon({name: name}), icon_size: 22 });
-            box.add_child(emblem);
-            return box;
-        };
-        return new Search.GridSearchResult(provider, metaInfo, Main.overview.searchController._searchResults);
+    getInitialResultSet(terms) {
+        const query = terms.join(' ').trim();
+        if (!query)
+            return [];
+
+        const results = [];
+
+        this._entries.forEach((entry, index) => {
+            if (this._matchEntry(entry, query))
+                results.push(index.toString());
+        });
+
+        return results;
+    }
+
+    getSubsearchResultSet(previousResults, terms) {
+        // Für Einfachheit: neu suchen
+        return this.getInitialResultSet(terms);
     }
 
     filterResults(results, max) {
         return results.slice(0, max);
     }
 
-    async getResultMetas(ids, cancellable) {
-        let metas = [];
-        for (let id of ids) {
-            let session = this._sessions.find(s => s.id === id);
-            if (session) {
-                metas.push({ id: session.id, name: session.name, description: session.url, iconKey: session.iconKey });
+    //
+    // ICONS
+    //
+    _getIconForEntry(entry) {
+        // Kategorie-basiert
+        const iconsDir = `${this._extension.path}/icons`;
+
+        let iconFileName = 'search-icon.svg'; // Default
+
+        switch (entry.category) {
+            case 'web':
+                iconFileName = 'web.svg';
+                break;
+            case 'file':
+                iconFileName = 'file.svg';
+                break;
+            case 'copy':
+                iconFileName = 'copy.svg';
+                break;
+            case 'exec':
+                iconFileName = 'exec.svg';
+                break;
+        }
+
+        const iconPath = `${iconsDir}/${iconFileName}`;
+        const file = Gio.File.new_for_path(iconPath);
+        return new Gio.FileIcon({ file });
+    }
+
+    //
+    // METADATEN
+    //
+    getResultMeta(resultId) {
+        const index = parseInt(resultId);
+        const entry = this._entries[index];
+
+        if (!entry)
+            return null;
+
+        // Dynamische Beschreibung
+        let subtitle = entry.description;
+        if (!subtitle) {
+            switch (entry.category) {
+                case 'web':
+                    subtitle = `Öffne URL: ${entry.value}`;
+                    break;
+                case 'file':
+                    subtitle = `Öffne Datei: ${entry.value}`;
+                    break;
+                case 'copy':
+                    subtitle = `In Zwischenablage kopieren: ${entry.value}`;
+                    break;
+                case 'exec':
+                    subtitle = `Kommando ausführen: ${entry.value}`;
+                    break;
+                default:
+                    subtitle = entry.value;
             }
+        }
+
+        return {
+            id: resultId,
+            name: entry.name,
+            description: subtitle,
+            createIcon: size => this._getIconForEntry(entry),
+        };
+    }
+
+    getResultMetas(resultIds) {
+        const metas = [];
+        for (const id of resultIds) {
+            const meta = this.getResultMeta(id);
+            if (meta)
+                metas.push(meta);
         }
         return metas;
     }
 
-    activateResult(id, terms) {
-        let session = this._sessions.find(s => s.id === id);
-        if (session) {
-            log("[CSV][DEBUG] Öffne Treffer: " + session.name + " -> " + session.url);
-            Util.spawn(['xdg-open', session.url]);
+    //
+    // AKTIONEN
+    //
+    _openUrl(url) {
+        try {
+            Gio.AppInfo.launch_default_for_uri(url, null);
+        } catch (e) {
+            log(`CSV-Search-Provider: Fehler beim Öffnen der URL ${url}: ${e}`);
         }
-        Main.overview.hide();
     }
 
-    _getResultSet(sessions, terms, cancellable) {
-        let results = [];
-        let regexes = terms.map(t => new RegExp(t, 'i'));
-        for (let s of sessions) {
-            if (regexes.every(r => r.test(s.name))) results.push(s.id);
+    _openFile(path) {
+        try {
+            const file = Gio.File.new_for_path(path);
+            const uri = file.get_uri();
+            Gio.AppInfo.launch_default_for_uri(uri, null);
+        } catch (e) {
+            log(`CSV-Search-Provider: Fehler beim Öffnen der Datei ${path}: ${e}`);
         }
-        return results;
     }
 
-    async getInitialResultSet(terms, cancellable) {
-        return this._getResultSet(this._sessions, terms, cancellable);
+    _copyToClipboard(text) {
+        const clipboard = St.Clipboard.get_default();
+        clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
+        Main.notify('CSV Search Provider', 'In Zwischenablage kopiert.');
     }
 
-    async getSubsearchResultSet(results, terms, cancellable) {
-        return this.getInitialResultSet(terms, cancellable);
+    _execCommand(cmd) {
+        try {
+            GLib.spawn_command_line_async(cmd);
+        } catch (e) {
+            log(`CSV-Search-Provider: Fehler beim Ausführen von ${cmd}: ${e}`);
+        }
     }
-};
 
-export default class CsvSearchProviderExtension {
+    activateResult(resultId, terms) {
+        const index = parseInt(resultId);
+        const entry = this._entries[index];
+        if (!entry)
+            return;
+
+        const value = entry.value;
+
+        // Wenn Kategorie gesetzt ist, hat sie Vorrang
+        switch (entry.category) {
+            case 'web':
+                this._openUrl(value);
+                return;
+            case 'file':
+                this._openFile(value);
+                return;
+            case 'copy':
+                this._copyToClipboard(value);
+                return;
+            case 'exec':
+                this._execCommand(value);
+                return;
+        }
+
+        // Fallback: heuristisch
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+            this._openUrl(value);
+        } else if (value.startsWith('/') || value.startsWith('~')) {
+            // Datei oder Script
+            this._openFile(value);
+        } else {
+            // Default: kopieren
+            this._copyToClipboard(value);
+        }
+    }
+
+    //
+    // PROVIDER-INFOS
+    //
+    getName() {
+        return 'CSV Search Provider';
+    }
+
+    getProviderType() {
+        // WICHTIG: sorgt für zeilenweise Darstellung im gemeinsamen Container
+        return 'application';
+    }
+
+    getIcon() {
+        // Icon für den Provider selbst (z.B. in Einstellungen)
+        const iconPath = `${this._extension.path}/icons/search-icon.svg`;
+        const file = Gio.File.new_for_path(iconPath);
+        return new Gio.FileIcon({ file });
+    }
+}
+
+export default class CsvSearchProviderExtension extends Extension {
     enable() {
-        log("[CSV] Enabling CSV Search Provider Extension");
-        if (!provider) {
-            provider = new CsvSearchProvider();
-            Main.overview.searchController.addProvider(provider);
-            log(`[CSV] Extension aktiviert. Gesamt Treffer: ${provider._sessions.length}`);
-        }
+        this._provider = new CsvSearchProvider(this);
+        this._provider.enable();
     }
 
     disable() {
-        if (provider) {
-            Main.overview.searchController.removeProvider(provider);
-            provider._csvMonitors.forEach(m => m.cancel());
-            provider = null;
+        if (this._provider) {
+            this._provider.disable();
+            this._provider = null;
         }
     }
 }

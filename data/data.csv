@@ -1,0 +1,5 @@
+Name;Beschreibung;Wert;Kategorie
+Google;Suche im Web;https://www.google.de;web
+Config Datei;Öffnet eine Konfigurationsdatei;/home/stefan/.config/meinprog/config;file
+Token;Kopiert einen Token in die Zwischenablage;ABC-123-XYZ;copy
+Backup Script;Startet ein Backup Script;/home/stefan/bin/backup.sh;exec
