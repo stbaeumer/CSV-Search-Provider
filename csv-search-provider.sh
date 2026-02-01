@@ -67,7 +67,7 @@ function debug_extension() {
   gnome-extensions info csv-search-provider@stbaeumer.github.com
   echo
   echo "--- GNOME Shell Log (journalctl /usr/bin/gnome-shell -f, STRG+C zum Beenden) ---"
-  journalctl /usr/bin/gnome-shell -f | grep -i error | grep -i csv
+  journalctl -f _EXE=/usr/bin/gnome-shell | grep -i csv
 }
 
 case "$1" in

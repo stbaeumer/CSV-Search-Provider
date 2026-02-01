@@ -66,18 +66,20 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
                         let data_dir = keyfile.get_string('remmina_pref', 'datadir_path');
                         // if data_dir is empty then default to data/remmina in the
                         if (!data_dir || data_dir == "") {
-                            console.debug("remmina pref datadir_path empty - using default: " + default_datadir);
+                            log("[CSV] csv pref datadir_path empty - using default: " + default_datadir);
                             data_dir = default_datadir;
                         }
                         if (paths.indexOf(data_dir) < 0) {
                             paths.push(data_dir);
                         }
                     } else {
-                        console.warn("remmina_pref group not found in remmina pref file: " + pref_file_path);
+                        // Warnung im logging-System ausgeben
+                        console.warn("[CSV] csv pref group not found in csv pref file: " + pref_file_path);
                     }
                     keyfile = null;
                 } catch (e) {
-                    console.warn("Failed to load remmina pref file: " + pref_file_path + ": " + e.toString());
+                    // Warnung im logging-System ausgeben
+                    console.warn("[CSV] Failed to load csv pref file: " + pref_file_path + ": " + e.toString());
                 }
             }
         }
@@ -85,9 +87,14 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         return paths;
     }
 
+    // Wird im Konstruktor der Klasse aufgerufen.
     _monitorCsvDir(path) {
         let dir = Gio.file_new_for_path(path);
         let monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+        
+        const downloadsDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD);
+
+        log("[CSV] Monitoring CSV directory: " + path);
         monitor.connect('changed', (monitor, file, other_file, type) => {
             this._onMonitorChanged(monitor, file, other_file, type);
         });
@@ -97,7 +104,9 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         this._listDirAsync(dir, (files) => {
             files.map((f) => {
                 let name = f.get_name();
+                log("[CSV] Initial load of CSV file: " + name);
                 let file_path = GLib.build_filenamev([path, name]);
+                log("[CSV] Initial load of CSV file path: " + file_path);
                 let file = Gio.file_new_for_path(file_path);
                 this._onMonitorChanged(monitor, file,
                                        null, Gio.FileMonitorEvent.CREATED);
@@ -105,7 +114,9 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         });
     }
 
+    // Der Konstruktor der Klasse wird durch enable() aufgerufen.
     constructor(name) {
+        log("[CSV] Initializing CSV Search Provider");
         this.id = 'remmina';
 
         this.theme = new St.IconTheme();
@@ -118,6 +129,7 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         this._csvMonitors = [];
 
         let paths = this._getDataDirPaths();
+        log("[CSV] Data directories to monitor: " + paths.join(", "));
         for (let i = 0; i < paths.length; i++) {
             this._monitorCsvDir(paths[i]);
         }
@@ -132,7 +144,7 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
             try {
                 keyfile.load_from_file(path, 0);
             } catch (e) {
-                console.warn("Failed to load remmina session file: " + path + ": " + e.toString());
+                console.warn("Failed to load csv session file: " + path + ": " + e.toString());
                 return;
             }
 
@@ -226,10 +238,11 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
                         icon_size: size });
                     box.add_child(emblem);
                 } else {
-                    console.debug("Failed to find emblem icon for protocol: " + metaInfo.protocol);
+                    console.error("Failed to find emblem icon for protocol: " + metaInfo.protocol);
                 }
             } else {
-                console.debug("No emblem defined for protocol: " + metaInfo.protocol);
+                // So werden Fehler vom logging-System erkannt
+                console.error("No emblem defined for protocol: " + metaInfo.protocol);
             }
             return box;
         };
@@ -319,32 +332,48 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
     }
 };
 
+// Diese Klasse ist der Einstiegspunkt der Extension.
 export default class CsvSearchProviderExtension {
+    
+    // enable() ist der erste Code, der ausgeführt wird, wenn:
+    // *die Extension aktiviert wird
+    // *GNOME Shell neu startet
+    // *die Extension neu geladen wird (Alt+F2 → r)
     enable () {
+    log("[CSV] Enabling CSV Search Provider Extension");
+
         if (!csvApp) {
+            
             // desktop id changed in recent releases and make sure to include
             // snap/flatpak ids too
             let ids = ["org.remmina.Remmina", "remmina_remmina", "remmina", "remmina-file"];
             for (let i = 0; i < ids.length; i++) {
+                
+                // Versuche die CSV-Search-provider-Anwendung zu finden
                 csvApp = Shell.AppSystem.get_default().lookup_app(ids[i] + ".desktop");
                 if (csvApp) {
                     break;
                 }
             }
             if (!csvApp) {
-                console.warn("Failed to find remmina application");
+                console.warn("[CSV] Failed to find csv-search-provider application");
                 let installed = Shell.AppSystem.get_default().get_installed();
                 installed.forEach((app) => {
-                    // log all installed apps for debugging in case one of them is a new variant of remmina
-                    console.debug("Installed app: " + app.get_id());
+                    // log all installed apps for debugging in case one of them is a new variant of csv-search-provider
+                    log("[CSV] Installed app: " + app.get_id());
                 });
             }
         }
-        // only create the provider if remmina app is found otherwise we can't
-        // show icons or launch remmina so there is no point
+        // only create the provider if csv-search-provider app is found otherwise we can't
+        // show icons or launch csv-search-provider so there is no point
         if (!provider && csvApp) {
+            
+            // Sobald enable() das hier ausführt, wird der Konstruktor constructor(name) aufgerufen
             provider = new CsvSearchProvider();
+            
+            // Provider bei GNOME registrieren. Ab hier ist der Provider aktiv und taucht in der GNOME-Suche auf.
             Main.overview.searchController.addProvider(provider);
+            log("[CSV] App in Gnome registiert: " + csvApp.get_id());
         }
     }
 
@@ -361,5 +390,4 @@ export default class CsvSearchProviderExtension {
             csvApp = null;
         }
     }
-
 }
