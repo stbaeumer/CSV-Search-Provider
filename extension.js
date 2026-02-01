@@ -1,10 +1,7 @@
 /* -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*- */
 /**
  * CSV Search Provider for GNOME Shell (Downloads CSV)
- *
- * Copyright (c) 2026 Stefan Bäumer <baeumer@posteo.de>
- *
- * Lizenz: GPLv3
+ * Extended Debug + Icon Fix
  */
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -15,34 +12,31 @@ import St from 'gi://St';
 import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 import * as Search from 'resource:///org/gnome/shell/ui/search.js';
 
-let csvApp = null;
+let provider = null;
 
 const emblems = {
     'NX': ['remmina-nx', 'org.remmina.Remmina-nx'],
     'RDP': ['remmina-rdp', 'org.remmina.Remmina-rdp'],
-    'SFTP': ['remmina-sftp', 'org.remmina.Remmina-sftp'],
-    'SPICE': ['remmina-spice', 'org.remmina.Remmina-spice'],
-    'SSH': ['remmina-ssh', 'org.remmina.Remmina-ssh', 'gnome-terminal', 'org.gnome.Terminal', 'x-term'],
-    'VNC': ['remmina-vnc', 'org.remmina.Remmina-vnc'],
-    'XDMCP': ['remmina-xdmcp', 'org.remmina.Remmina-xdmcp']
+    'SFTP': ['remmina-sftp', 'org.remmina.SFTP'],
+    'SPICE': ['remmina-spice', 'org.remmina.SPICE'],
+    'SSH': ['remmina-ssh', 'org.remmina.SSH', 'gnome-terminal', 'x-terminal'],
+    'VNC': ['remmina-vnc', 'org.remmina.VNC'],
+    'XDMCP': ['remmina-xdmcp', 'org.remmina.XDMCP']
 };
-
-let provider = null;
 
 var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
     constructor() {
         log("[CSV] Initializing CSV Search Provider");
-
-        this.theme = new St.IconTheme();
         this._sessions = [];
         this._csvMonitors = [];
+        this.theme = new St.IconTheme();
 
-        // Download-Ordner des Users
         const downloadsDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD);
         if (!downloadsDir) {
             log("[CSV] Download-Verzeichnis konnte nicht ermittelt werden.");
             return;
         }
+
         log("[CSV] Monitoring CSV directory: " + downloadsDir);
         this._monitorCsvDir(downloadsDir);
     }
@@ -55,7 +49,6 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         });
         this._csvMonitors.push(monitor);
 
-        // Initial alle Dateien einlesen
         this._listDirAsync(dir, (files) => {
             files.forEach((f) => {
                 let name = f.get_name();
@@ -66,21 +59,24 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
                     this._parseCsvFile(file);
                 }
             });
+
+            log(`[CSV][DEBUG] Initial scan complete. Gesamt Treffer: ${this._sessions.length}`);
         });
     }
 
     _onMonitorChanged(monitor, file, other_file, type) {
         let path = file.get_path();
-        if (type === Gio.FileMonitorEvent.CREATED || 
-            type === Gio.FileMonitorEvent.CHANGED || 
+        if (type === Gio.FileMonitorEvent.CREATED ||
+            type === Gio.FileMonitorEvent.CHANGED ||
             type === Gio.FileMonitorEvent.CHANGES_DONE_HINT) {
             if (path.toLowerCase().endsWith('.csv')) {
                 log(`[CSV][DEBUG] CSV geändert/neu: ${path}`);
                 this._parseCsvFile(file);
+                log(`[CSV][DEBUG] Nach Änderung: Gesamt Treffer = ${this._sessions.length}`);
             }
         } else if (type === Gio.FileMonitorEvent.DELETED) {
             this._sessions = this._sessions.filter(s => s.file !== path);
-            log(`[CSV][DEBUG] CSV gelöscht: ${path}`);
+            log(`[CSV][DEBUG] CSV gelöscht: ${path}, Gesamt Treffer = ${this._sessions.length}`);
         }
     }
 
@@ -95,9 +91,7 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
             log(`[CSV][DEBUG] Datei gefunden: ${path}, Zeilen: ${lines.length}`);
 
             let newSessions = [];
-
             lines.forEach((line, index) => {
-                // Trenne Spalten: | oder ; und evtl. in ""
                 let parts = line.match(/(".*?"|[^|;]+)(?=\||;|$)/g);
                 if (!parts || parts.length < 3) return;
 
@@ -108,14 +102,11 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
 
                 let sessionId = `${path}:${index}`;
                 newSessions.push({ id: sessionId, name, url, iconKey, file: path });
-
                 log(`[CSV][DEBUG] Zeile ${index}: '${name}' -> '${url}', icon='${iconKey}'`);
             });
 
-            // Alte Zeilen der gleichen Datei entfernen, neue hinzufügen
             this._sessions = this._sessions.filter(s => s.file !== path);
             this._sessions.push(...newSessions);
-
         } catch (e) {
             log("[CSV][DEBUG] Fehler beim Lesen der CSV: " + path + " : " + e.toString());
         }
@@ -182,9 +173,7 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         let results = [];
         let regexes = terms.map(t => new RegExp(t, 'i'));
         for (let s of sessions) {
-            if (regexes.every(r => r.test(s.name))) {
-                results.push(s.id);
-            }
+            if (regexes.every(r => r.test(s.name))) results.push(s.id);
         }
         return results;
     }
@@ -201,10 +190,10 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
 export default class CsvSearchProviderExtension {
     enable() {
         log("[CSV] Enabling CSV Search Provider Extension");
-
         if (!provider) {
             provider = new CsvSearchProvider();
             Main.overview.searchController.addProvider(provider);
+            log(`[CSV] Extension aktiviert. Gesamt Treffer: ${provider._sessions.length}`);
         }
     }
 
