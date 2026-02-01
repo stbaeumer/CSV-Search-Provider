@@ -42,11 +42,17 @@ class CsvSearchProvider {
             for (const line of lines) {
                 const parts = line.split(';');
 
+                const name = (parts[0] || '').trim();
+                const description = (parts[1] || '').trim();
+                const value = (parts[2] || '').trim();
+                const col4 = (parts[3] || '').trim();
+                const icon = col4;
+
                 const entry = {
-                    name: (parts[0] || '').trim(),
-                    description: (parts[1] || '').trim(),
-                    value: (parts[2] || '').trim(),
-                    category: (parts[3] || '').trim().toLowerCase(),
+                    name,
+                    description,
+                    value,
+                    icon,
                 };
 
                 if (entry.name)
@@ -97,28 +103,26 @@ class CsvSearchProvider {
     // ICONS
     //
     _getIconForEntry(entry) {
-        // Kategorie-basiert
         const iconsDir = `${this._extension.path}/icons`;
+        const defaultIcon = 'search-icon.svg';
 
-        let iconFileName = 'search-icon.svg'; // Default
+        let iconPath = '';
 
-        switch (entry.category) {
-            case 'web':
-                iconFileName = 'web.svg';
-                break;
-            case 'file':
-                iconFileName = 'file.svg';
-                break;
-            case 'copy':
-                iconFileName = 'copy.svg';
-                break;
-            case 'exec':
-                iconFileName = 'exec.svg';
-                break;
+        if (entry.icon) {
+            if (entry.icon.startsWith('/') || entry.icon.startsWith('~'))
+                iconPath = entry.icon;
+            else
+                iconPath = `${iconsDir}/${entry.icon}`;
         }
 
-        const iconPath = `${iconsDir}/${iconFileName}`;
-        const file = Gio.File.new_for_path(iconPath);
+        if (!iconPath)
+            iconPath = `${iconsDir}/${defaultIcon}`;
+
+        let file = Gio.File.new_for_path(iconPath);
+        if (!file.query_exists(null)) {
+            file = Gio.File.new_for_path(`${iconsDir}/${defaultIcon}`);
+        }
+
         return new Gio.FileIcon({ file });
     }
 
@@ -157,7 +161,10 @@ class CsvSearchProvider {
             id: resultId,
             name: entry.name,
             description: subtitle,
-            createIcon: size => this._getIconForEntry(entry),
+            createIcon: size => new St.Icon({
+                gicon: this._getIconForEntry(entry),
+                icon_size: size,
+            }),
         };
     }
 
@@ -250,8 +257,8 @@ class CsvSearchProvider {
     }
 
     getProviderType() {
-        // WICHTIG: sorgt für zeilenweise Darstellung im gemeinsamen Container
-        return 'application';
+        // Zeilenweise Darstellung im gemeinsamen Container (wie Einstellungen/Bookmarks)
+        return 'list';
     }
 
     getIcon() {
