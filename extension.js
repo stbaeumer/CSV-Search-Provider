@@ -1,21 +1,10 @@
 /* -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*- */
 /**
- * CSV Search Provider for GNOME Shell
+ * CSV Search Provider for GNOME Shell (Downloads CSV)
  *
- * Copyright (c) 2020 Stefan Bäumer <baeumer@posteo.de>
+ * Copyright (c) 2026 Stefan Bäumer <baeumer@posteo.de>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Lizenz: GPLv3
  */
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -37,160 +26,101 @@ const emblems = {
     'VNC': ['remmina-vnc', 'org.remmina.Remmina-vnc'],
     'XDMCP': ['remmina-xdmcp', 'org.remmina.Remmina-xdmcp']
 };
+
 let provider = null;
 
 var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
-    _getDataDirPaths() {
-        // remmina stores its configuration in ~/.config/remmina/remmina.pref -
-        // this may also be within a snap -
-        // ie. ~/snap/remmina/current/.config/remmina/remmina.pref or flatpak -
-        // ~/.var/app/org.remmina.Remmina/config/remmina/remmina.pref - from
-        // each of these files parse it as a gkeyfile and get the
-        // remmina_pref.datadir_path value from each - however if the value is
-        // not set then we need to try and use the same default that remmina
-        // itself uses
-        let dirs = new Map([
-            [GLib.build_filenamev([GLib.get_home_dir(), '.config', 'remmina']), GLib.build_filenamev([GLib.get_home_dir(), '.local', 'share', 'remmina'])],
-            [GLib.build_filenamev([GLib.get_home_dir(), 'snap', 'remmina', 'current', '.config', 'remmina']),  GLib.build_filenamev([GLib.get_home_dir(), 'snap', 'remmina', 'current', '.local', 'share', 'remmina'])],
-            [GLib.build_filenamev([GLib.get_home_dir(), '.var', 'app', 'org.remmina.Remmina', 'config', 'remmina'] ),  GLib.build_filenamev([GLib.get_home_dir(), '.var', 'app', 'org.remmina.Remmina', 'data', 'remmina'])]
-        ]);
-        let paths = [];
-        dirs.forEach((default_datadir, dir_path, _) => {
-            let pref_file_path = GLib.build_filenamev([dir_path, 'remmina.pref']);
-            let pref_file = Gio.file_new_for_path(pref_file_path);
-            if (pref_file.query_exists(null)) {
-                let keyfile = new GLib.KeyFile();
-                try {
-                    keyfile.load_from_file(pref_file_path, 0);
-                    if (keyfile.has_group('remmina_pref')) {
-                        let data_dir = keyfile.get_string('remmina_pref', 'datadir_path');
-                        // if data_dir is empty then default to data/remmina in the
-                        if (!data_dir || data_dir == "") {
-                            log("[CSV] csv pref datadir_path empty - using default: " + default_datadir);
-                            data_dir = default_datadir;
-                        }
-                        if (paths.indexOf(data_dir) < 0) {
-                            paths.push(data_dir);
-                        }
-                    } else {
-                        // Warnung im logging-System ausgeben
-                        console.warn("[CSV] csv pref group not found in csv pref file: " + pref_file_path);
-                    }
-                    keyfile = null;
-                } catch (e) {
-                    // Warnung im logging-System ausgeben
-                    console.warn("[CSV] Failed to load csv pref file: " + pref_file_path + ": " + e.toString());
-                }
-            }
-        }
-        , this);
-        return paths;
-    }
-
-    // Wird im Konstruktor der Klasse aufgerufen.
-    _monitorCsvDir(path) {
-        let dir = Gio.file_new_for_path(path);
-        let monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
-        
-        const downloadsDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD);
-
-        log("[CSV] Monitoring CSV directory: " + path);
-        monitor.connect('changed', (monitor, file, other_file, type) => {
-            this._onMonitorChanged(monitor, file, other_file, type);
-        });
-        /* save a reference so we can cancel it on disable */
-        this._csvMonitors.push(monitor);
-
-        this._listDirAsync(dir, (files) => {
-            files.map((f) => {
-                let name = f.get_name();
-                log("[CSV] Initial load of CSV file: " + name);
-                let file_path = GLib.build_filenamev([path, name]);
-                log("[CSV] Initial load of CSV file path: " + file_path);
-                let file = Gio.file_new_for_path(file_path);
-                this._onMonitorChanged(monitor, file,
-                                       null, Gio.FileMonitorEvent.CREATED);
-            }, this);
-        });
-    }
-
-    // Der Konstruktor der Klasse wird durch enable() aufgerufen.
-    constructor(name) {
+    constructor() {
         log("[CSV] Initializing CSV Search Provider");
-        this.id = 'remmina';
 
         this.theme = new St.IconTheme();
-        // add snap icon search path
-        let snapIconPath = GLib.build_filenamev(['/snap', 'remmina', 'current', 'usr', 'share', 'icons']);
-        if (GLib.file_test(snapIconPath, GLib.FileTest.IS_DIR)) {
-            this.theme.append_search_path(snapIconPath);
-        }
         this._sessions = [];
         this._csvMonitors = [];
 
-        let paths = this._getDataDirPaths();
-        log("[CSV] Data directories to monitor: " + paths.join(", "));
-        for (let i = 0; i < paths.length; i++) {
-            this._monitorCsvDir(paths[i]);
+        // Download-Ordner des Users
+        const downloadsDir = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD);
+        if (!downloadsDir) {
+            log("[CSV] Download-Verzeichnis konnte nicht ermittelt werden.");
+            return;
         }
+        log("[CSV] Monitoring CSV directory: " + downloadsDir);
+        this._monitorCsvDir(downloadsDir);
+    }
+
+    _monitorCsvDir(path) {
+        let dir = Gio.file_new_for_path(path);
+        let monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null);
+        monitor.connect('changed', (monitor, file, other_file, type) => {
+            this._onMonitorChanged(monitor, file, other_file, type);
+        });
+        this._csvMonitors.push(monitor);
+
+        // Initial alle Dateien einlesen
+        this._listDirAsync(dir, (files) => {
+            files.forEach((f) => {
+                let name = f.get_name();
+                if (name.toLowerCase().endsWith('.csv')) {
+                    log(`[CSV][DEBUG] Initial load CSV: ${name}`);
+                    let file_path = GLib.build_filenamev([path, name]);
+                    let file = Gio.file_new_for_path(file_path);
+                    this._parseCsvFile(file);
+                }
+            });
+        });
     }
 
     _onMonitorChanged(monitor, file, other_file, type) {
         let path = file.get_path();
-        if (type == Gio.FileMonitorEvent.CREATED ||
-            type == Gio.FileMonitorEvent.CHANGED ||
-            type == Gio.FileMonitorEvent.CHANGES_DONE_HINT) {
-            let keyfile = new GLib.KeyFile();
-            try {
-                keyfile.load_from_file(path, 0);
-            } catch (e) {
-                console.warn("Failed to load csv session file: " + path + ": " + e.toString());
-                return;
+        if (type === Gio.FileMonitorEvent.CREATED || 
+            type === Gio.FileMonitorEvent.CHANGED || 
+            type === Gio.FileMonitorEvent.CHANGES_DONE_HINT) {
+            if (path.toLowerCase().endsWith('.csv')) {
+                log(`[CSV][DEBUG] CSV geändert/neu: ${path}`);
+                this._parseCsvFile(file);
             }
-
-            if (!keyfile.has_group('remmina')) {
-                return;
-            }
-            let name = keyfile.get_string('remmina', 'name');
-            if (name) {
-                // get the type of session so we can use different
-                // icons for each
-                let protocol = keyfile.get_string('remmina', 'protocol');
-                let server = keyfile.get_string('remmina', 'server');
-                let group = keyfile.get_string('remmina', 'group');
-                let session = { name: name,
-                                protocol: protocol,
-                                server: server,
-                                group: group,
-                                file: path };
-                // if this session already exists in _sessions then
-                // delete and add again to update it
-                for (let i = 0; i < this._sessions.length; i++) {
-                    let s = this._sessions[i];
-                    if (s.file == session.file) {
-                        this._sessions.splice(i, 1);
-                        break;
-                    }
-                }
-                this._sessions.push(session);
-            } else {
-                console.warn("CSV session missing name in file: " + path);
-            }
-                keyfile = null;
-        } else if (type == Gio.FileMonitorEvent.DELETED) {
-            for (let i = 0; i < this._sessions.length; i++) {
-                let s = this._sessions[i];
-                if (s.file == path) {
-                    /* remove the current element from _sessions */
-                    this._sessions.splice(i, 1);
-                    break;
-                }
-            }
+        } else if (type === Gio.FileMonitorEvent.DELETED) {
+            this._sessions = this._sessions.filter(s => s.file !== path);
+            log(`[CSV][DEBUG] CSV gelöscht: ${path}`);
         }
     }
 
-    // steal from FileUtils since doesn't exist in FileUtils anymore
-    // since GNOME 3.12
+    _parseCsvFile(file) {
+        let path = file.get_path();
+        try {
+            let [ok, contents] = file.load_contents(null);
+            if (!ok) return;
+
+            let text = imports.byteArray.toString(contents);
+            let lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+            log(`[CSV][DEBUG] Datei gefunden: ${path}, Zeilen: ${lines.length}`);
+
+            let newSessions = [];
+
+            lines.forEach((line, index) => {
+                // Trenne Spalten: | oder ; und evtl. in ""
+                let parts = line.match(/(".*?"|[^|;]+)(?=\||;|$)/g);
+                if (!parts || parts.length < 3) return;
+
+                let name = parts[0].replace(/^"|"$/g, '').trim();
+                let url = parts[1].replace(/^"|"$/g, '').trim();
+                let iconKey = parts[2].replace(/^"|"$/g, '').trim();
+                if (!emblems[iconKey]) iconKey = Object.keys(emblems)[0];
+
+                let sessionId = `${path}:${index}`;
+                newSessions.push({ id: sessionId, name, url, iconKey, file: path });
+
+                log(`[CSV][DEBUG] Zeile ${index}: '${name}' -> '${url}', icon='${iconKey}'`);
+            });
+
+            // Alte Zeilen der gleichen Datei entfernen, neue hinzufügen
+            this._sessions = this._sessions.filter(s => s.file !== path);
+            this._sessions.push(...newSessions);
+
+        } catch (e) {
+            log("[CSV][DEBUG] Fehler beim Lesen der CSV: " + path + " : " + e.toString());
+        }
+    }
+
     _listDirAsync(file, callback) {
         let allFiles = [];
         file.enumerate_children_async('standard::name,standard::type',
@@ -215,35 +145,10 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
     createResultObject(metaInfo, terms) {
         metaInfo.createIcon = (size) => {
             let box = new St.BoxLayout();
-            let icon = null;
-            icon = csvApp.create_icon_texture(size);
-            box.add_child(icon);
-            if (metaInfo.protocol in emblems) {
-                // remmina emblems are fixed size of 22 pixels
-                let size = 22;
-                let names = emblems[metaInfo.protocol];
-                let name = null;
-                let found = false;
-                for (let n = 0; !found && n < names.length; n++) {
-                    name = names[n];
-                    found = this.theme.has_icon(name);
-                    if (!found) {
-                        // also try with -symbolic suffix
-                        name = name + '-symbolic';
-                        found = this.theme.has_icon(name);
-                    }
-                }
-                if (found) {
-                    let emblem = new St.Icon({ gicon: new Gio.ThemedIcon({name: name}),
-                        icon_size: size });
-                    box.add_child(emblem);
-                } else {
-                    console.error("Failed to find emblem icon for protocol: " + metaInfo.protocol);
-                }
-            } else {
-                // So werden Fehler vom logging-System erkannt
-                console.error("No emblem defined for protocol: " + metaInfo.protocol);
-            }
+            let names = emblems[metaInfo.iconKey] || emblems[Object.keys(emblems)[0]];
+            let name = names[0];
+            let emblem = new St.Icon({ gicon: new Gio.ThemedIcon({name: name}), icon_size: 22 });
+            box.add_child(emblem);
             return box;
         };
         return new Search.GridSearchResult(provider, metaInfo, Main.overview.searchController._searchResults);
@@ -253,78 +158,39 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
         return results.slice(0, max);
     }
 
-    _wrapText(str, maxWidth) {
-        return str.replace(
-            new RegExp(`(?![^\\n]{1,${maxWidth}}$)([^\\n]{1,${maxWidth}})\\s`, 'g'),
-            '$1\n');
-    }
-
     async getResultMetas(ids, cancellable) {
         let metas = [];
-        for (let i = 0; i < ids.length; i++) {
-            let id = ids[i];
-            let session = null;
-            // find session details
-            for (let j = 0; !session && j < this._sessions.length; j++) {
-                let _session = this._sessions[j];
-                if (_session.file == id)
-                    session = _session;
-            }
-            if (session != null) {
-                let prefix = ((session.group && session.group != "") ?
-                              ("[" + session.group + "] ") : "");
-                let name = this._wrapText(prefix + session.name + ' (' + session.protocol + ')',
-                                          // TODO: Wrap at max label width
-                                          15);
-
-                metas.push({ id: id,
-                             protocol: session.protocol,
-                             description: session.server,
-                             name: name });
-            } else {
-                console.warn("failed to find session with id: " + id);
+        for (let id of ids) {
+            let session = this._sessions.find(s => s.id === id);
+            if (session) {
+                metas.push({ id: session.id, name: session.name, description: session.url, iconKey: session.iconKey });
             }
         }
         return metas;
     }
 
     activateResult(id, terms) {
-        if (csvApp) {
-            csvApp.app_info.launch([Gio.file_new_for_path(id)], null);
-        } else {
-            Util.spawn(['remmina', '-c', id]);
+        let session = this._sessions.find(s => s.id === id);
+        if (session) {
+            log("[CSV][DEBUG] Öffne Treffer: " + session.name + " -> " + session.url);
+            Util.spawn(['xdg-open', session.url]);
         }
-        // specifically hide the overview -
-        // https://github.com/stbaeumer/csv- search-provider/issues/19
         Main.overview.hide();
     }
 
     _getResultSet(sessions, terms, cancellable) {
         let results = [];
-        // search for terms ignoring case - create re's once only for
-        // each term and make sure matches all terms
-        let res = terms.map(function (term) { return new RegExp(term, 'i'); });
-        for (let i = 0; i < sessions.length; i++) {
-            let session = sessions[i];
-            let failed = false;
-            for (let j = 0; !failed && j < res.length; j++) {
-                let re = res[j];
-                // search on name, group, protocol or the term remmina
-                failed |= (session.name.search(re) < 0 &&
-                           session.group.search(re) < 0 &&
-                           session.protocol.search(re) < 0 &&
-                           'remmina'.search(re) < 0);
-            }
-            if (!failed) {
-                results.push(session.file);
+        let regexes = terms.map(t => new RegExp(t, 'i'));
+        for (let s of sessions) {
+            if (regexes.every(r => r.test(s.name))) {
+                results.push(s.id);
             }
         }
         return results;
     }
 
     async getInitialResultSet(terms, cancellable) {
-        let realResults = this._getResultSet(this._sessions, terms, cancellable);
-        return realResults;
+        return this._getResultSet(this._sessions, terms, cancellable);
     }
 
     async getSubsearchResultSet(results, terms, cancellable) {
@@ -332,62 +198,21 @@ var CsvSearchProvider = class CsvSearchProvider_SearchProvider {
     }
 };
 
-// Diese Klasse ist der Einstiegspunkt der Extension.
 export default class CsvSearchProviderExtension {
-    
-    // enable() ist der erste Code, der ausgeführt wird, wenn:
-    // *die Extension aktiviert wird
-    // *GNOME Shell neu startet
-    // *die Extension neu geladen wird (Alt+F2 → r)
-    enable () {
-    log("[CSV] Enabling CSV Search Provider Extension");
+    enable() {
+        log("[CSV] Enabling CSV Search Provider Extension");
 
-        if (!csvApp) {
-            
-            // desktop id changed in recent releases and make sure to include
-            // snap/flatpak ids too
-            let ids = ["org.remmina.Remmina", "remmina_remmina", "remmina", "remmina-file"];
-            for (let i = 0; i < ids.length; i++) {
-                
-                // Versuche die CSV-Search-provider-Anwendung zu finden
-                csvApp = Shell.AppSystem.get_default().lookup_app(ids[i] + ".desktop");
-                if (csvApp) {
-                    break;
-                }
-            }
-            if (!csvApp) {
-                console.warn("[CSV] Failed to find csv-search-provider application");
-                let installed = Shell.AppSystem.get_default().get_installed();
-                installed.forEach((app) => {
-                    // log all installed apps for debugging in case one of them is a new variant of csv-search-provider
-                    log("[CSV] Installed app: " + app.get_id());
-                });
-            }
-        }
-        // only create the provider if csv-search-provider app is found otherwise we can't
-        // show icons or launch csv-search-provider so there is no point
-        if (!provider && csvApp) {
-            
-            // Sobald enable() das hier ausführt, wird der Konstruktor constructor(name) aufgerufen
+        if (!provider) {
             provider = new CsvSearchProvider();
-            
-            // Provider bei GNOME registrieren. Ab hier ist der Provider aktiv und taucht in der GNOME-Suche auf.
             Main.overview.searchController.addProvider(provider);
-            log("[CSV] App in Gnome registiert: " + csvApp.get_id());
         }
     }
 
     disable() {
         if (provider) {
             Main.overview.searchController.removeProvider(provider);
-            for (let i = 0; i < provider._csvMonitors.length; i++) {
-                provider._csvMonitors[i].cancel();
-                provider._csvMonitors[i] = null;
-            }
+            provider._csvMonitors.forEach(m => m.cancel());
             provider = null;
-        }
-        if (csvApp) {
-            csvApp = null;
         }
     }
 }
