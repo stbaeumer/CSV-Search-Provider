@@ -10,13 +10,13 @@ GNOME Shell extension to search CSV and TXT files in `~/.csv-search-provider`. R
 
 ## Usage
 
-Place CSV or TXT files in `~/.csv-search-provider/`.
+Place *.csv or *.txt files in `~/.csv-search-provider/`.
 
 ### Format
 
 Each line has the format:
 ```
-Display text|Teams URL/URL/Text/Email
+Display text|teams-url/url/text/mail
 ```
 
 **Example** (`~/.csv-search-provider/my.txt`):
@@ -24,7 +24,7 @@ Display text|Teams URL/URL/Text/Email
 John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
 Jane Doe|jane.doe@acme.com
 Clipboard-example|clipboard-content
-google|https://google.de
+ecosia|https://ecosia.org
 ```
 
 ### Comments
