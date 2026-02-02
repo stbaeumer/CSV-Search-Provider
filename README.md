@@ -1,6 +1,10 @@
 # CSV Search Provider
 
-CSV Search Provider durchsucht CSV-Dateien und zeigt die Ergebnisse in der GNOME Shell Suche an.
+CSV Search Provider durchsucht CSV-Dateien aus dem Downloads-Ordner und zeigt die Ergebnisse in der GNOME Shell Suche an.
+
+## Installation
+
+Die Extension lädt automatisch alle `.csv`-Dateien aus `~/Downloads`.
 
 ## CSV-Format
 
@@ -13,11 +17,13 @@ Name;Beschreibung;Wert;Icon
 - **Spalte 1 (Name)**: Der Anzeigetitel des Eintrags (wird in der Suche angezeigt)
 - **Spalte 2 (Beschreibung)**: Zusätzliche Beschreibung (wird unter dem Titel angezeigt)
 - **Spalte 3 (Wert)**: URL, Dateipfad oder Text, der geöffnet/kopiert werden soll
-- **Spalte 4 (Icon)**: Icon-Dateiname aus dem `icons`-Ordner (z.B. `web.svg`). Optional - wenn leer oder nicht vorhanden, wird `search-icon.svg` verwendet.
+- **Spalte 4 (Icon)**: Icon-Dateiname aus dem `icons`-Ordner (z.B. `web.svg`, `file.svg`, `copy.svg`, `exec.svg`). Die Kategorie wird automatisch aus dem Icon-Namen extrahiert.
 
 **Kommentare**: Zeilen, die mit `#` beginnen, werden ignoriert.
 
 ### Beispiel
+
+Lege eine Datei `data.csv` in `~/Downloads` an:
 
 ```csv
 Google;Suche im Web;https://www.google.de;web.svg
@@ -25,15 +31,23 @@ Config Datei;Öffnet eine Konfigurationsdatei;/home/user/.config/app/config;file
 Token;Kopiert einen Token in die Zwischenablage;ABC-123-XYZ;copy.svg
 # Das ist ein Kommentar
 Backup Script;Startet ein Backup Script;/home/user/bin/backup.sh;exec.svg
-Ohne Icon;Kein Icon angegeben;https://example.com;
 ```
 
 ### Verhalten
 
-Die Extension erkennt automatisch, was mit dem Wert passieren soll:
-- URLs (beginnen mit `http://` oder `https://`): Werden im Browser geöffnet
-- Dateipfade (beginnen mit `/` oder `~`): Werden mit der Standard-App geöffnet
-- Alles andere: Wird in die Zwischenablage kopiert
+Die Extension erkennt automatisch anhand des Icons, was mit dem Wert passieren soll:
+- **web.svg**: URL wird im Browser geöffnet
+- **file.svg**: Datei wird mit der Standard-App geöffnet
+- **copy.svg**: Text wird in die Zwischenablage kopiert
+- **exec.svg**: Kommando wird ausgeführt
+
+### Logs anzeigen
+
+Um zu sehen, welche CSV-Dateien geladen wurden:
+
+```bash
+journalctl -f -o cat /usr/bin/gnome-shell | grep CSV-Search-Provider
+```
 
 
 

@@ -27,39 +27,80 @@ class CsvSearchProvider {
     _loadCsv() {
         this._entries = [];
 
-        const csvPath = `${this._extension.path}/data/data.csv`;
-        const file = Gio.File.new_for_path(csvPath);
+        // Lade CSV-Dateien aus ~/Downloads
+        const downloadsPath = GLib.build_filenamev([GLib.get_home_dir(), 'Downloads']);
+        const downloadsDir = Gio.File.new_for_path(downloadsPath);
+        
+        log(`[CSV] Suche nach CSV-Dateien in ${downloadsPath}`);
 
         try {
-            const [, contents] = file.load_contents(null);
-            const text = new TextDecoder().decode(contents);
+            const enumerator = downloadsDir.enumerate_children(
+                'standard::name,standard::type',
+                Gio.FileQueryInfoFlags.NONE,
+                null
+            );
 
-            const lines = text
-                .split('\n')
-                .map(l => l.trim())
-                .filter(l => l.length > 0 && !l.startsWith('#'));
+            let fileInfo;
+            let totalFiles = 0;
+            
+            while ((fileInfo = enumerator.next_file(null)) !== null) {
+                const filename = fileInfo.get_name();
+                
+                // Nur CSV-Dateien laden
+                if (!filename.endsWith('.csv')) {
+                    continue;
+                }
 
-            for (const line of lines) {
-                const parts = line.split(';');
+                totalFiles++;
+                const csvPath = GLib.build_filenamev([downloadsPath, filename]);
+                const file = Gio.File.new_for_path(csvPath);
 
-                const name = (parts[0] || '').trim();
-                const description = (parts[1] || '').trim();
-                const value = (parts[2] || '').trim();
-                const col4 = (parts[3] || '').trim();
-                const icon = col4;
+                try {
+                    const [, contents] = file.load_contents(null);
+                    const text = new TextDecoder().decode(contents);
 
-                const entry = {
-                    name,
-                    description,
-                    value,
-                    icon,
-                };
+                    const lines = text
+                        .split('\n')
+                        .map(l => l.trim())
+                        .filter(l => l.length > 0 && !l.startsWith('#'));
 
-                if (entry.name)
-                    this._entries.push(entry);
+                    log(`[CSV] Datei ${filename} gefunden mit ${lines.length} Zeilen`);
+
+                    for (const line of lines) {
+                        const parts = line.split(';');
+
+                        const name = (parts[0] || '').trim();
+                        const description = (parts[1] || '').trim();
+                        const value = (parts[2] || '').trim();
+                        const col4 = (parts[3] || '').trim();
+                        const icon = col4;
+                        
+                        // Kategorie aus Icon-Namen extrahieren (z.B. "web.svg" -> "web")
+                        let category = '';
+                        if (col4) {
+                            category = col4.replace(/\.svg$/, '');
+                        }
+
+                        const entry = {
+                            name,
+                            description,
+                            value,
+                            icon,
+                            category,
+                        };
+
+                        if (entry.name)
+                            this._entries.push(entry);
+                    }
+                } catch (e) {
+                    log(`[CSV] Fehler beim Laden der CSV-Datei ${filename}: ${e}`);
+                }
             }
+
+            log(`[CSV] Insgesamt ${totalFiles} CSV-Datei(en) gefunden, ${this._entries.length} Einträge geladen`);
+            
         } catch (e) {
-            log(`CSV-Search-Provider: Fehler beim Laden der CSV (${csvPath}): ${e}`);
+            log(`[CSV] Fehler beim Zugriff auf Downloads-Ordner: ${e}`);
         }
     }
 
@@ -115,13 +156,21 @@ class CsvSearchProvider {
                 iconPath = `${iconsDir}/${entry.icon}`;
         }
 
-        if (!iconPath)
+        if (!iconPath){
             iconPath = `${iconsDir}/${defaultIcon}`;
+            log(`[CSV] Default-Icon-Pfad: ${iconPath}`);
+        }
+            
+
+        if (iconPath.startsWith('~'))
+            iconPath = GLib.build_filenamev([GLib.get_home_dir(), iconPath.slice(2)]);
 
         let file = Gio.File.new_for_path(iconPath);
-        if (!file.query_exists(null)) {
-            log(`CSV-Search-Provider: Icon nicht gefunden: ${iconPath}, nutze Default`);
+        if (!file.query_exists(null)) {            
             file = Gio.File.new_for_path(`${iconsDir}/${defaultIcon}`);
+            log(`[CSV] Icon nicht gefunden: ${iconPath}, nutze Default ${file.get_path()}`);
+        } else {
+            log(`[CSV] Icon gefunden: ${file.get_path()}`);
         }
 
         return new Gio.FileIcon({ file });
@@ -158,18 +207,27 @@ class CsvSearchProvider {
             }
         }
 
+        log(`[CSV] Metadaten für Ergebnis ${resultId} abgerufen`);
+        log(`[CSV] Name: ${entry.name}`);
+        log(`[CSV] Beschreibung: ${subtitle}`);
+        log(`[CSV] Icon: ${entry.icon}`);
+
         return {
             id: resultId,
             name: entry.name,
             description: subtitle,
-            createIcon: size => new St.Icon({
-                gicon: this._getIconForEntry(entry),
-                icon_size: size,
-            }),
+            createIcon: size => {
+                const gicon = this._getIconForEntry(entry);
+                log(`[CSV] createIcon aufgerufen: size=${size}, gicon=${gicon}`);
+                return new St.Icon({
+                    gicon: gicon,
+                    icon_size: size,
+                });
+            },
         };
     }
 
-    getResultMetas(resultIds) {
+    async getResultMetas(resultIds, cancellable) {
         const metas = [];
         for (const id of resultIds) {
             const meta = this.getResultMeta(id);
@@ -185,8 +243,9 @@ class CsvSearchProvider {
     _openUrl(url) {
         try {
             Gio.AppInfo.launch_default_for_uri(url, null);
+            log(`[CSV] URL geöffnet: ${url}`);
         } catch (e) {
-            log(`CSV-Search-Provider: Fehler beim Öffnen der URL ${url}: ${e}`);
+            log(`[CSV] Fehler beim Öffnen der URL ${url}: ${e}`);
         }
     }
 
@@ -195,8 +254,9 @@ class CsvSearchProvider {
             const file = Gio.File.new_for_path(path);
             const uri = file.get_uri();
             Gio.AppInfo.launch_default_for_uri(uri, null);
+            log(`[CSV] Datei geöffnet: ${path}`);
         } catch (e) {
-            log(`CSV-Search-Provider: Fehler beim Öffnen der Datei ${path}: ${e}`);
+            log(`[CSV] Fehler beim Öffnen der Datei ${path}: ${e}`);
         }
     }
 
@@ -204,13 +264,14 @@ class CsvSearchProvider {
         const clipboard = St.Clipboard.get_default();
         clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
         Main.notify('CSV Search Provider', 'In Zwischenablage kopiert.');
+        log(`[CSV] Text in Zwischenablage kopiert: ${text}`);
     }
 
     _execCommand(cmd) {
         try {
             GLib.spawn_command_line_async(cmd);
         } catch (e) {
-            log(`CSV-Search-Provider: Fehler beim Ausführen von ${cmd}: ${e}`);
+            log(`[CSV] Fehler beim Ausführen von ${cmd}: ${e}`);
         }
     }
 
@@ -266,20 +327,23 @@ class CsvSearchProvider {
         // Icon für den Provider selbst (z.B. in Einstellungen)
         const iconPath = `${this._extension.path}/icons/search-icon.svg`;
         const file = Gio.File.new_for_path(iconPath);
+        log(`[CSV] Lade Provider-Icon von ${iconPath}`);
         return new Gio.FileIcon({ file });
     }
 }
 
 export default class CsvSearchProviderExtension extends Extension {
-    enable() {
+    enable() {        
         this._provider = new CsvSearchProvider(this);
         this._provider.enable();
+        log('[CSV] Aktiviert');
     }
 
     disable() {
         if (this._provider) {
             this._provider.disable();
             this._provider = null;
+            log('[CSV] Deaktiviert');
         }
     }
 }

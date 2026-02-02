@@ -60,6 +60,12 @@ function debug_extension() {
   echo "--- gnome-shell --version ---"
   gnome-shell --version
   echo
+  echo "--- Icons ls -la \"$(dirname \"$0\")/icons/\"---"
+  ls -la "$(dirname "$0")/icons/"
+  echo
+  echo "--- Icons ~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/icons/ ---"
+  ls -la ~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/icons/
+  echo
   echo "--- Check if extension is loaded ---"
   gnome-extensions list | grep -q csv-search-provider || echo "nicht installiert"
   echo
