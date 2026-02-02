@@ -1,8 +1,10 @@
-# csv-search-provider
+# CSV-Search-Provider
 
 GNOME Shell extension to search CSV and TXT files in `~/.csv-search-provider`. Rows found in the CSV are converted into results in GNOME Shell search.
 
 ## Installation
+
+Unzip download.
 
 ```bash
 ./csv-search-provider.sh install
