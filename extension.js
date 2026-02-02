@@ -3,6 +3,8 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import Clutter from 'gi://Clutter';
+import Meta from 'gi://Meta';
 
 class CsvSearchProvider {
     constructor(extension) {
@@ -198,6 +200,31 @@ class CsvSearchProvider {
     //
     // AKTIONEN
     //
+    _isUrl(text) {
+        return text.match(/^https?:\/\//i) !== null;
+    }
+
+    _isEmail(text) {
+        return text.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null;
+    }
+
+    _isShellScript(text) {
+        return text.endsWith('.sh');
+    }
+
+    _copyToClipboard(text) {
+        try {
+            const clipboard = St.Clipboard.get_default();
+            clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
+            log(`[csv-search-provider] In Zwischenablage kopiert: ${text}`);
+            
+            // Benachrichtigung anzeigen
+            Main.notify('CSV Search Provider', `In Zwischenablage kopiert: ${text}`);
+        } catch (e) {
+            log(`[csv-search-provider] Fehler beim Kopieren in Zwischenablage: ${e}`);
+        }
+    }
+
     _openUrl(url) {
         try {
             Gio.AppInfo.launch_default_for_uri(url, null);
@@ -207,13 +234,65 @@ class CsvSearchProvider {
         }
     }
 
+    _openEmail(email) {
+        try {
+            // Stelle sicher, dass wir eine mailto:-URI haben
+            const mailtoUri = email.startsWith('mailto:') ? email : `mailto:${email}`;
+            
+            // Versuche zuerst die Standard-Methode
+            try {
+                Gio.AppInfo.launch_default_for_uri(mailtoUri, null);
+                log(`[csv-search-provider] E-Mail geöffnet: ${email}`);
+                return;
+            } catch (e) {
+                log(`[csv-search-provider] Standard-Methode fehlgeschlagen, versuche xdg-open: ${e}`);
+            }
+            
+            // Fallback: xdg-open verwenden
+            GLib.spawn_async(
+                null,
+                ['xdg-open', mailtoUri],
+                null,
+                GLib.SpawnFlags.SEARCH_PATH,
+                null
+            );
+            log(`[csv-search-provider] E-Mail mit xdg-open geöffnet: ${email}`);
+        } catch (e) {
+            log(`[csv-search-provider] Fehler beim Öffnen der E-Mail ${email}: ${e}`);
+        }
+    }
+
+    _openShellScript(scriptPath) {
+        try {
+            const appInfo = Gio.AppInfo.create_from_commandline(
+                `kitty bash -c "bash '${scriptPath}'; read -p 'Drücke Enter zum Beenden...';"`,
+                'kitty',
+                Gio.AppInfoCreateFlags.NONE
+            );
+            appInfo.launch([], null);
+            log(`[csv-search-provider] Shell-Script in kitty geöffnet: ${scriptPath}`);
+        } catch (e) {
+            log(`[csv-search-provider] Fehler beim Öffnen des Shell-Scripts ${scriptPath}: ${e}`);
+        }
+    }
+
     activateResult(resultId, terms) {
         const index = parseInt(resultId);
         const entry = this._entries[index];
         if (!entry)
             return;
 
-        this._openUrl(entry.url);
+        const content = entry.url;
+
+        if (this._isUrl(content)) {
+            this._openUrl(content);
+        } else if (this._isEmail(content)) {
+            this._openEmail(content);
+        } else if (this._isShellScript(content)) {
+            this._openShellScript(content);
+        } else {
+            this._copyToClipboard(content);
+        }
     }
 
     //
