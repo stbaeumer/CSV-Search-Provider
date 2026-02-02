@@ -24,6 +24,23 @@ class CsvSearchProvider {
     }
 
     //
+    // ICON-ZUWEISUNG
+    //
+    _getIconNameForContent(content) {
+        if (this._isUrl(content)) {
+            if (content.toLowerCase().includes('team')) {
+                return 'teams.png';
+            }
+            return 'browser.png';
+        } else if (this._isEmail(content)) {
+            return 'mail.png';
+        } else if (this._isShellScript(content)) {
+            return 'shell.png';
+        }
+        return 'clipboard.png';
+    }
+
+    //
     // DATEN LADEN
     //
     _loadData() {
@@ -75,7 +92,13 @@ class CsvSearchProvider {
 
                         const displayText = (parts[0] || '').trim();
                         const url = (parts[1] || '').trim();
-                        const iconName = (parts[2] || '').trim();
+                        
+                        if (!displayText || !url) {
+                            continue;
+                        }
+                        
+                        // Icon automatisch basierend auf Inhaltstyp zuweisen
+                        const iconName = this._getIconNameForContent(url);
                         
                         const entry = {
                             displayText,
@@ -84,9 +107,7 @@ class CsvSearchProvider {
                             filename,
                         };
 
-                        if (entry.displayText && entry.url) {
-                            this._entries.push(entry);
-                        }
+                        this._entries.push(entry);
                     }
                 } catch (e) {
                     log(`[csv-search-provider] Fehler beim Laden der Datei ${filename}: ${e}`);
@@ -135,24 +156,18 @@ class CsvSearchProvider {
     // ICONS
     //
     _getIconForEntry(entry) {
-        const defaultIconName = 'icon.png';
-        const iconName = entry.iconName || defaultIconName;
-        const iconPath = GLib.build_filenamev([this._dataDir, iconName]);
+        const iconName = entry.iconName;
+        const extensionPath = this._extension.path;
+        const iconPath = GLib.build_filenamev([extensionPath, 'icons', iconName]);
 
         let file = Gio.File.new_for_path(iconPath);
         
-        if (!file.query_exists(null)) {
-            const defaultPath = GLib.build_filenamev([this._dataDir, defaultIconName]);
-            file = Gio.File.new_for_path(defaultPath);
-            
-            if (!file.query_exists(null)) {
-                log(`[csv-search-provider] Icon nicht gefunden: ${iconPath} und fallback ${defaultPath}`);
-                return null;
-            }
-            log(`[csv-search-provider] Icon nicht gefunden: ${iconPath}, nutze Fallback ${defaultPath}`);
+        if (file.query_exists(null)) {
+            return new Gio.FileIcon({ file });
         }
-
-        return new Gio.FileIcon({ file });
+        
+        log(`[csv-search-provider] Icon nicht gefunden: ${iconPath}`);
+        return null;
     }
 
     //
