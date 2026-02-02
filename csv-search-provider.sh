@@ -1,79 +1,60 @@
 #!/bin/bash
 # csv-search-provider.sh
-# Installiert, aktiviert oder deinstalliert die Extension stbaeumer.github.com
+# Installiert, aktiviert oder deinstalliert die Extension
 # Parameter: install | uninstall | debug
 
 EXT_ID="csv-search-provider@stbaeumer.github.com"
-# ...existing code...
 EXT_SRC="$(dirname "$0")"
 EXT_DEST="$HOME/.local/share/gnome-shell/extensions/$EXT_ID"
+DATA_DIR="$HOME/.csv-search-provider"
 
 function install_extension() {
   echo "Installiere Extension nach $EXT_DEST ..."
   rm -rf "$EXT_DEST"
   mkdir -p "$EXT_DEST"
-  cp -r "$EXT_SRC"/* "$EXT_DEST"/
-  # Schema kompilieren, falls vorhanden
-  if [ -d "$EXT_DEST/schemas" ]; then
-    glib-compile-schemas "$EXT_DEST/schemas"
-  fi
+  mkdir -p "$DATA_DIR"
+  cp -r "$EXT_SRC"/* "$EXT_DEST"/ 2>/dev/null || true
+  rm -f "$EXT_DEST/csv-search-provider.sh"
   gnome-extensions disable "$EXT_ID" 2>/dev/null
   gnome-extensions enable "$EXT_ID"
   echo "Extension installiert und aktiviert."
-  echo "Melde GNOME-Sitzung ab ..."
-  gnome-session-quit --no-prompt
+  echo "Datendirectory erstellt: $DATA_DIR"
+  echo "Bitte gnome-shell neustarten oder abmelden und anmelden."
 }
 
 function uninstall_extension() {
   echo "Deinstalliere Extension ..."
-  gnome-extensions disable "$EXT_ID"
-  gnome-extensions uninstall "$EXT_ID"
+  gnome-extensions disable "$EXT_ID" 2>/dev/null
+  gnome-extensions uninstall "$EXT_ID" 2>/dev/null
   rm -rf "$EXT_DEST"
   echo "Extension deinstalliert."
-  echo "Melde GNOME-Sitzung ab ..."
-  gnome-session-quit --no-prompt
+  echo "Bitte gnome-shell neustarten oder abmelden und anmelden."
 }
 
 function debug_extension() {
   echo "--- Extension-Ordner: $EXT_DEST ---"
-  ls -l "$EXT_DEST"
+  ls -l "$EXT_DEST" 2>/dev/null || echo "Nicht installiert"
   echo
   echo "--- metadata.json ---"
-  cat "$EXT_DEST/metadata.json"
+  cat "$EXT_DEST/metadata.json" 2>/dev/null || echo "Nicht gefunden"
   echo
-  # Lies den Suchordner aus den Extension-Settings
-  SUCHORDNER=$(gsettings get org.gnome.shell.extensions.csv-search-provider root | sed -e "s/^'//" -e "s/'$//")
-  if [ -z "$SUCHORDNER" ] || [ "$SUCHORDNER" = "" ]; then
-    SUCHORDNER="$HOME/Downloads"
-  fi
-  echo "--- CSV/TXT-Dateien im Suchordner: $SUCHORDNER ---"
-  find "$SUCHORDNER" -maxdepth 1 -type f \( -iname '*.csv' -o -iname '*.txt' \) -exec ls -lh {} +
+  echo "--- Daten-Verzeichnis: $DATA_DIR ---"
+  ls -lh "$DATA_DIR" 2>/dev/null || echo "Verzeichnis existiert nicht"
   echo
-  echo "--- Suche nach 'Silvester' in $SUCHORDNER ---"
-  ERGEBNIS=$(grep -i 'Silvester' "$SUCHORDNER"/*.csv "$SUCHORDNER"/*.txt 2>/dev/null)
-  if [ -n "$ERGEBNIS" ]; then
-    echo "$ERGEBNIS"
-  else
-    echo "Nicht gefunden"
-  fi
+  echo "--- CSV/TXT-Dateien in $DATA_DIR ---"
+  find "$DATA_DIR" -maxdepth 1 -type f \( -iname '*.csv' -o -iname '*.txt' \) -exec ls -lh {} + 2>/dev/null || echo "Keine Dateien gefunden"
+  echo
+  echo "--- Icons in $DATA_DIR ---"
+  ls -lh "$DATA_DIR"/*.png "$DATA_DIR"/*.svg 2>/dev/null || echo "Keine Icons gefunden"
   echo
   echo "--- gnome-shell --version ---"
   gnome-shell --version
   echo
-  echo "--- Icons ls -la \"$(dirname \"$0\")/icons/\"---"
-  ls -la "$(dirname "$0")/icons/"
+  echo "--- Extension Status ---"
+  gnome-extensions info "$EXT_ID" 2>/dev/null || echo "Extension nicht installiert"
   echo
-  echo "--- Icons ~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/icons/ ---"
-  ls -la ~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/icons/
-  echo
-  echo "--- Check if extension is loaded ---"
-  gnome-extensions list | grep -q csv-search-provider || echo "nicht installiert"
-  echo
-  echo "--- Check extension status ---"
-  gnome-extensions info csv-search-provider@stbaeumer.github.com
-  echo
-  echo "--- GNOME Shell Log (journalctl /usr/bin/gnome-shell -f, STRG+C zum Beenden) ---"
-  journalctl -f _EXE=/usr/bin/gnome-shell | grep -i csv
+  echo "--- GNOME Shell Logs (letzte 20 Zeilen mit 'csv-search-provider') ---"
+  journalctl -n 50 -o cat /usr/bin/gnome-shell 2>/dev/null | grep -i csv-search-provider | tail -20
 }
 
 case "$1" in
@@ -91,4 +72,3 @@ case "$1" in
     exit 1
     ;;
 esac
-
