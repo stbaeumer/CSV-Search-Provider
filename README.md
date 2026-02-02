@@ -1,6 +1,6 @@
 # csv-search-provider
 
-GNOME Shell Extension zum Durchsuchen von CSV- und TXT-Dateien in `~/.csv-search-provider`.
+GNOME Shell extension to search CSV and TXT files in `~/.csv-search-provider`. Rows found in the CSV are converted into results in GNOME Shell search.
 
 ## Installation
 
@@ -8,38 +8,34 @@ GNOME Shell Extension zum Durchsuchen von CSV- und TXT-Dateien in `~/.csv-search
 ./csv-search-provider.sh install
 ```
 
-## Verwendung
+## Usage
 
-Lege CSV- oder TXT-Dateien in `~/.csv-search-provider/` ab.
+Place CSV or TXT files in `~/.csv-search-provider/`.
 
 ### Format
 
-Jede Zeile hat das Format:
+Each line has the format:
 ```
-Anzeigetext|URL|icon.png
-```
-
-**Beispiel** (`~/.csv-search-provider/teams-chat.txt`):
-```
-John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com|teams.png
-Jane Doe|https://teams.microsoft.com/l/chat/0/0?users=jane.doe@acme.com|teams.png
+Display text|Teams URL/URL/Text/Email
 ```
 
-### Icons
+**Example** (`~/.csv-search-provider/my.txt`):
+```
+John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
+Jane Doe|jane.doe@acme.com
+Clipboard-example|clipboard-content
+google|https://google.de
+```
 
-- Icon-Dateien liegen in `~/.csv-search-provider/`
-- Fallback-Icon: `icon.png` (Standard-Icon wenn keine Icon-Spalte angegeben)
-- Icons können `.png` oder `.svg` sein
+### Comments
 
-### Kommentare
+Lines starting with `#` are ignored.
 
-Zeilen die mit `#` beginnen, werden ignoriert.
+### Reload
 
-### Neuladen
+Simply toggle the extension off and on again in the extension manager. The new lines should then appear. If necessary, log out and back in.
 
-Einfach den Schalter im Extensionmanager auf aus und wieder auf an stellen. Anschließend sollten die neuen Zeilen angezeigt werden. Notfalls in Gnome ab- und wieder anmelden.
-
-## Deinstallation
+## Uninstallation
 
 ```bash
 ./csv-search-provider.sh uninstall
