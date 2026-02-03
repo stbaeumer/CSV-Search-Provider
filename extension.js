@@ -46,12 +46,12 @@ class CsvSearchProvider {
     _loadData() {
         this._entries = [];
 
-        log(`[csv-search-provider] Suche nach CSV/TXT-Dateien in ${this._dataDir}`);
+        log(`[csv-search-provider] Searching for CSV/TXT files in ${this._dataDir}`);
 
         const dataDir = Gio.File.new_for_path(this._dataDir);
         
         if (!dataDir.query_exists(null)) {
-            log(`[csv-search-provider] Verzeichnis existiert nicht: ${this._dataDir}`);
+            log(`[csv-search-provider] Directory does not exist: ${this._dataDir}`);
             return;
         }
 
@@ -85,7 +85,7 @@ class CsvSearchProvider {
                         .map(l => l.trim())
                         .filter(l => l.length > 0 && !l.startsWith('#'));
 
-                    log(`[csv-search-provider] Datei ${filename} gefunden mit ${lines.length} Zeilen`);
+                    log(`[csv-search-provider] File ${filename} found with ${lines.length} lines`);
 
                     for (const line of lines) {
                         const parts = line.split('|').map(p => p.trim());
@@ -110,14 +110,14 @@ class CsvSearchProvider {
                         this._entries.push(entry);
                     }
                 } catch (e) {
-                    log(`[csv-search-provider] Fehler beim Laden der Datei ${filename}: ${e}`);
+                    log(`[csv-search-provider] Error loading file ${filename}: ${e}`);
                 }
             }
 
-            log(`[csv-search-provider] Insgesamt ${totalFiles} Datei(en) gefunden, ${this._entries.length} Einträge geladen`);
+            log(`[csv-search-provider] Total ${totalFiles} file(s) found, ${this._entries.length} entries loaded`);
             
         } catch (e) {
-            log(`[csv-search-provider] Fehler beim Zugriff auf ${this._dataDir}: ${e}`);
+            log(`[csv-search-provider] Error accessing ${this._dataDir}: ${e}`);
         }
     }
 
@@ -166,7 +166,7 @@ class CsvSearchProvider {
             return new Gio.FileIcon({ file });
         }
         
-        log(`[csv-search-provider] Icon nicht gefunden: ${iconPath}`);
+        log(`[csv-search-provider] Icon not found: ${iconPath}`);
         return null;
     }
 
@@ -180,7 +180,7 @@ class CsvSearchProvider {
         if (!entry)
             return null;
 
-        log(`[csv-search-provider] Metadaten für Ergebnis ${resultId}: ${entry.displayText}`);
+        log(`[csv-search-provider] Metadata for result ${resultId}: ${entry.displayText}`);
 
         return {
             id: resultId,
@@ -231,39 +231,39 @@ class CsvSearchProvider {
         try {
             const clipboard = St.Clipboard.get_default();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
-            log(`[csv-search-provider] In Zwischenablage kopiert: ${text}`);
+            log(`[csv-search-provider] Copied to clipboard: ${text}`);
             
-            // Benachrichtigung anzeigen
-            Main.notify('CSV Search Provider', `In Zwischenablage kopiert: ${text}`);
+            // Show notification
+            Main.notify('CSV Search Provider', `Copied to clipboard: ${text}`);
         } catch (e) {
-            log(`[csv-search-provider] Fehler beim Kopieren in Zwischenablage: ${e}`);
+            log(`[csv-search-provider] Error copying to clipboard: ${e}`);
         }
     }
 
     _openUrl(url) {
         try {
             Gio.AppInfo.launch_default_for_uri(url, null);
-            log(`[csv-search-provider] URL geöffnet: ${url}`);
+            log(`[csv-search-provider] URL opened: ${url}`);
         } catch (e) {
-            log(`[csv-search-provider] Fehler beim Öffnen der URL ${url}: ${e}`);
+            log(`[csv-search-provider] Error opening URL ${url}: ${e}`);
         }
     }
 
     _openEmail(email) {
         try {
-            // Stelle sicher, dass wir eine mailto:-URI haben
+            // Ensure we have a mailto: URI
             const mailtoUri = email.startsWith('mailto:') ? email : `mailto:${email}`;
             
-            // Versuche zuerst die Standard-Methode
+            // Try default method first
             try {
                 Gio.AppInfo.launch_default_for_uri(mailtoUri, null);
-                log(`[csv-search-provider] E-Mail geöffnet: ${email}`);
+                log(`[csv-search-provider] Email opened: ${email}`);
                 return;
             } catch (e) {
-                log(`[csv-search-provider] Standard-Methode fehlgeschlagen, versuche xdg-open: ${e}`);
+                log(`[csv-search-provider] Default method failed, trying xdg-open: ${e}`);
             }
             
-            // Fallback: xdg-open verwenden
+            // Fallback: use xdg-open
             GLib.spawn_async(
                 null,
                 ['xdg-open', mailtoUri],
@@ -271,9 +271,9 @@ class CsvSearchProvider {
                 GLib.SpawnFlags.SEARCH_PATH,
                 null
             );
-            log(`[csv-search-provider] E-Mail mit xdg-open geöffnet: ${email}`);
+            log(`[csv-search-provider] Email opened with xdg-open: ${email}`);
         } catch (e) {
-            log(`[csv-search-provider] Fehler beim Öffnen der E-Mail ${email}: ${e}`);
+            log(`[csv-search-provider] Error opening email ${email}: ${e}`);
         }
     }
 
@@ -352,14 +352,14 @@ export default class CsvSearchProviderExtension extends Extension {
     enable() {        
         this._provider = new CsvSearchProvider(this);
         this._provider.enable();
-        log('[csv-search-provider] Aktiviert');
+        log('[csv-search-provider] Enabled');
     }
 
     disable() {
         if (this._provider) {
             this._provider.disable();
             this._provider = null;
-            log('[csv-search-provider] Deaktiviert');
+            log('[csv-search-provider] Disabled');
         }
     }
 }

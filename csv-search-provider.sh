@@ -1,62 +1,62 @@
 #!/bin/bash
 # csv-search-provider.sh
-# Installiert, aktiviert oder deinstalliert die Extension
-# Parameter: install | uninstall | debug
+# Installs, activates, or uninstalls the extension
+# Parameters: install | uninstall | debug
 
 EXT_ID="csv-search-provider@stbaeumer.github.com"
 EXT_SRC="$(dirname "$0")"
 EXT_DEST="$HOME/.local/share/gnome-shell/extensions/$EXT_ID"
 
 function install_extension() {
-  echo "Installiere Extension nach $EXT_DEST ..."
+  echo "Installing extension to $EXT_DEST ..."
   rm -rf "$EXT_DEST"
   mkdir -p "$EXT_DEST"
   cp -r "$EXT_SRC"/* "$EXT_DEST"/ 2>/dev/null || true
   rm -f "$EXT_DEST/csv-search-provider.sh"
   
-  # Entferne alten Datenordner, falls vorhanden
+  # Remove old data directory if it exists
   OLD_DATA_DIR="$HOME/.csv-search-provider"
   if [ -d "$OLD_DATA_DIR" ]; then
-    echo "Entferne alten Datenordner: $OLD_DATA_DIR"
+    echo "Removing old data directory: $OLD_DATA_DIR"
     rm -rf "$OLD_DATA_DIR"
   fi
   
   gnome-extensions disable "$EXT_ID" 2>/dev/null
   gnome-extensions enable "$EXT_ID"
-  echo "Extension installiert und aktiviert."
-  echo "CSV/TXT-Dateien können in $EXT_DEST abgelegt werden."
-  echo "Bitte gnome-shell neustarten oder abmelden und anmelden."
+  echo "Extension installed and activated."
+  echo "CSV/TXT files can be placed in $EXT_DEST."
+  echo "Please restart gnome-shell or log out and log back in."
 }
 
 function uninstall_extension() {
-  echo "Deinstalliere Extension ..."
+  echo "Uninstalling extension ..."
   gnome-extensions disable "$EXT_ID" 2>/dev/null
   gnome-extensions uninstall "$EXT_ID" 2>/dev/null
   rm -rf "$EXT_DEST"
-  echo "Extension deinstalliert."
-  echo "Bitte gnome-shell neustarten oder abmelden und anmelden."
+  echo "Extension uninstalled."
+  echo "Please restart gnome-shell or log out and log back in."
 }
 
 function debug_extension() {
-  echo "--- Extension-Ordner: $EXT_DEST ---"
-  ls -l "$EXT_DEST" 2>/dev/null || echo "Nicht installiert"
+  echo "--- Extension directory: $EXT_DEST ---"
+  ls -l "$EXT_DEST" 2>/dev/null || echo "Not installed"
   echo
   echo "--- metadata.json ---"
-  cat "$EXT_DEST/metadata.json" 2>/dev/null || echo "Nicht gefunden"
+  cat "$EXT_DEST/metadata.json" 2>/dev/null || echo "Not found"
   echo
-  echo "--- CSV/TXT-Dateien im Extension-Ordner ---"
-  find "$EXT_DEST" -maxdepth 1 -type f \( -iname '*.csv' -o -iname '*.txt' \) -exec ls -lh {} + 2>/dev/null || echo "Keine Dateien gefunden"
+  echo "--- CSV/TXT files in extension directory ---"
+  find "$EXT_DEST" -maxdepth 1 -type f \( -iname '*.csv' -o -iname '*.txt' \) -exec ls -lh {} + 2>/dev/null || echo "No files found"
   echo
-  echo "--- Icons im Extension-Ordner ---"
-  ls -lh "$EXT_DEST"/icons/*.png "$EXT_DEST"/icons/*.svg 2>/dev/null || echo "Keine Icons gefunden"
+  echo "--- Icons in extension directory ---"
+  ls -lh "$EXT_DEST"/icons/*.png "$EXT_DEST"/icons/*.svg 2>/dev/null || echo "No icons found"
   echo
   echo "--- gnome-shell --version ---"
   gnome-shell --version
   echo
-  echo "--- Extension Status ---"
-  gnome-extensions info "$EXT_ID" 2>/dev/null || echo "Extension nicht installiert"
+  echo "--- Extension status ---"
+  gnome-extensions info "$EXT_ID" 2>/dev/null || echo "Extension not installed"
   echo
-  echo "--- GNOME Shell Logs (letzte 20 Zeilen mit 'csv-search-provider') ---"
+  echo "--- GNOME Shell logs (last 20 lines with 'csv-search-provider') ---"
   journalctl -n 50 -o cat /usr/bin/gnome-shell 2>/dev/null | grep -i csv-search-provider | tail -20
 }
 
@@ -71,7 +71,7 @@ case "$1" in
     debug_extension
     ;;
   *)
-    echo "Verwendung: $0 {install|uninstall|debug}"
+    echo "Usage: $0 {install|uninstall|debug}"
     exit 1
     ;;
 esac
