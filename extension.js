@@ -280,13 +280,27 @@ class CsvSearchProvider {
     _openShellScript(scriptPath) {
         try {
             const escapedPath = scriptPath.replace(/'/g, "'\\''" );
+            
+            // Prüfe, ob kitty verfügbar ist
+            let terminalCommand = null;
+            try {
+                GLib.spawn_command_line_sync('which kitty');
+                // kitty ist verfügbar
+                terminalCommand = `kitty bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`;
+                log(`[csv-search-provider] Verwende kitty für Shell-Script`);
+            } catch (e) {
+                // kitty nicht verfügbar, verwende Standard-Terminal
+                terminalCommand = `x-terminal-emulator -e bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`;
+                log(`[csv-search-provider] kitty nicht gefunden, verwende Standard-Terminal`);
+            }
+            
             const appInfo = Gio.AppInfo.create_from_commandline(
-                `kitty bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`,
-                'kitty',
+                terminalCommand,
+                'Terminal',
                 Gio.AppInfoCreateFlags.NONE
             );
             appInfo.launch([], null);
-            log(`[csv-search-provider] Shell-Script in kitty geöffnet: ${scriptPath}`);
+            log(`[csv-search-provider] Shell-Script geöffnet: ${scriptPath}`);
         } catch (e) {
             log(`[csv-search-provider] Fehler beim Öffnen des Shell-Scripts ${scriptPath}: ${e}`);
         }
