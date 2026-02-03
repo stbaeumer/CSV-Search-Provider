@@ -43,15 +43,12 @@ class CsvSearchProvider {
     //
     // DATEN LADEN
     //
-    _loadData() {
+    async _loadData() {
         this._entries = [];
-
-        log(`[csv-search-provider] Searching for CSV/TXT files in ${this._dataDir}`);
 
         const dataDir = Gio.File.new_for_path(this._dataDir);
         
         if (!dataDir.query_exists(null)) {
-            log(`[csv-search-provider] Directory does not exist: ${this._dataDir}`);
             return;
         }
 
@@ -77,15 +74,21 @@ class CsvSearchProvider {
                 const file = Gio.File.new_for_path(filePath);
 
                 try {
-                    const [, contents] = file.load_contents(null);
+                    const [, contents] = await new Promise((resolve, reject) => {
+                        file.load_contents_async(null, (source, result) => {
+                            try {
+                                resolve(source.load_contents_finish(result));
+                            } catch (e) {
+                                reject(e);
+                            }
+                        });
+                    });
                     const text = new TextDecoder().decode(contents);
 
                     const lines = text
                         .split('\n')
                         .map(l => l.trim())
                         .filter(l => l.length > 0 && !l.startsWith('#'));
-
-                    log(`[csv-search-provider] File ${filename} found with ${lines.length} lines`);
 
                     for (const line of lines) {
                         const parts = line.split('|').map(p => p.trim());
@@ -110,14 +113,12 @@ class CsvSearchProvider {
                         this._entries.push(entry);
                     }
                 } catch (e) {
-                    log(`[csv-search-provider] Error loading file ${filename}: ${e}`);
+                    logError(e, `Error loading file ${filename}`);
                 }
             }
 
-            log(`[csv-search-provider] Total ${totalFiles} file(s) found, ${this._entries.length} entries loaded`);
-            
         } catch (e) {
-            log(`[csv-search-provider] Error accessing ${this._dataDir}: ${e}`);
+            logError(e, `Error accessing data directory`);
         }
     }
 
@@ -166,7 +167,6 @@ class CsvSearchProvider {
             return new Gio.FileIcon({ file });
         }
         
-        log(`[csv-search-provider] Icon not found: ${iconPath}`);
         return null;
     }
 
@@ -179,8 +179,6 @@ class CsvSearchProvider {
 
         if (!entry)
             return null;
-
-        log(`[csv-search-provider] Metadata for result ${resultId}: ${entry.displayText}`);
 
         return {
             id: resultId,
@@ -231,21 +229,16 @@ class CsvSearchProvider {
         try {
             const clipboard = St.Clipboard.get_default();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
-            log(`[csv-search-provider] Copied to clipboard: ${text}`);
-            
-            // Show notification
-            Main.notify('CSV Search Provider', `Copied to clipboard: ${text}`);
         } catch (e) {
-            log(`[csv-search-provider] Error copying to clipboard: ${e}`);
+            logError(e, 'Error copying to clipboard');
         }
     }
 
     _openUrl(url) {
         try {
             Gio.AppInfo.launch_default_for_uri(url, null);
-            log(`[csv-search-provider] URL opened: ${url}`);
         } catch (e) {
-            log(`[csv-search-provider] Error opening URL ${url}: ${e}`);
+            logError(e, `Error opening URL ${url}`);
         }
     }
 
@@ -257,52 +250,39 @@ class CsvSearchProvider {
             // Try default method first
             try {
                 Gio.AppInfo.launch_default_for_uri(mailtoUri, null);
-                log(`[csv-search-provider] Email opened: ${email}`);
                 return;
             } catch (e) {
-                log(`[csv-search-provider] Default method failed, trying xdg-open: ${e}`);
+                // Fallback: use xdg-open
+                try {
+                    const launcher = new Gio.SubprocessLauncher({
+                        flags: Gio.SubprocessFlags.NONE
+                    });
+                    launcher.spawnv(['xdg-open', mailtoUri]);
+                } catch (spawnError) {
+                    logError(spawnError, `Error opening email with fallback`);
+                }
             }
-            
-            // Fallback: use xdg-open
-            GLib.spawn_async(
-                null,
-                ['xdg-open', mailtoUri],
-                null,
-                GLib.SpawnFlags.SEARCH_PATH,
-                null
-            );
-            log(`[csv-search-provider] Email opened with xdg-open: ${email}`);
         } catch (e) {
-            log(`[csv-search-provider] Error opening email ${email}: ${e}`);
+            logError(e, `Error opening email ${email}`);
         }
     }
 
     _openShellScript(scriptPath) {
         try {
-            const escapedPath = scriptPath.replace(/'/g, "'\\''" );
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.NONE
+            });
             
             // Prüfe, ob kitty verfügbar ist
-            let terminalCommand = null;
-            try {
-                GLib.spawn_command_line_sync('which kitty');
-                // kitty ist verfügbar
-                terminalCommand = `kitty bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`;
-                log(`[csv-search-provider] Verwende kitty für Shell-Script`);
-            } catch (e) {
-                // kitty nicht verfügbar, verwende Standard-Terminal
-                terminalCommand = `x-terminal-emulator -e bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`;
-                log(`[csv-search-provider] kitty nicht gefunden, verwende Standard-Terminal`);
-            }
+            const hasKitty = GLib.find_program_in_path('kitty') !== null;
             
-            const appInfo = Gio.AppInfo.create_from_commandline(
-                terminalCommand,
-                'Terminal',
-                Gio.AppInfoCreateFlags.NONE
-            );
-            appInfo.launch([], null);
-            log(`[csv-search-provider] Shell-Script geöffnet: ${scriptPath}`);
+            const args = hasKitty
+                ? ['kitty', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`]
+                : ['x-terminal-emulator', '-e', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`];
+            
+            launcher.spawnv(args);
         } catch (e) {
-            log(`[csv-search-provider] Fehler beim Öffnen des Shell-Scripts ${scriptPath}: ${e}`);
+            logError(e, `Error opening shell script ${scriptPath}`);
         }
     }
 
@@ -352,14 +332,12 @@ export default class CsvSearchProviderExtension extends Extension {
     enable() {        
         this._provider = new CsvSearchProvider(this);
         this._provider.enable();
-        log('[csv-search-provider] Enabled');
     }
 
     disable() {
         if (this._provider) {
             this._provider.disable();
             this._provider = null;
-            log('[csv-search-provider] Disabled');
         }
     }
 }
