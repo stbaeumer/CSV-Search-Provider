@@ -50,11 +50,11 @@ Jane Doe|jane.doe@acme.com
 
 Press Super to open Gnome-shell search.
 
-1. Type in "John Doe"
-2. Type in "Jane Doe"
-3. Type in "IBAN"
-4. Type in "Ecosia"
-5. Type in "Debug CSV"
+1. Type in "John Doe" -> open Teams-Chat with John Doe in Browser
+2. Type in "Jane Doe" -> open mailclient
+3. Type in "IBAN" -> copy DE12 1234 1234 1234 12 to clipboard
+4. Type in "Ecosia" -> open Ecosia Browser
+5. Type in "Debug CSV" -> run shellscript in kitty 
 
 **Shell Scripts with Parameters:**
 - Lines containing `.sh ` (with space) are treated as shell scripts with parameters
