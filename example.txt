@@ -1,0 +1,2 @@
+John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
+Jane Doe|jane.doe@acme.com

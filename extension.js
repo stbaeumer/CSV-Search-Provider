@@ -11,7 +11,7 @@ class CsvSearchProvider {
         this._extension = extension;
         this.id = extension.uuid;
         this._entries = [];
-        this._dataDir = GLib.build_filenamev([GLib.get_home_dir(), '.csv-search-provider']);
+        this._dataDir = extension.path;
     }
 
     enable() {
@@ -224,7 +224,7 @@ class CsvSearchProvider {
     }
 
     _isShellScript(text) {
-        return text.endsWith('.sh');
+        return text.endsWith('.sh') || text.includes('.sh ');
     }
 
     _copyToClipboard(text) {
@@ -279,8 +279,9 @@ class CsvSearchProvider {
 
     _openShellScript(scriptPath) {
         try {
+            const escapedPath = scriptPath.replace(/'/g, "'\\''" );
             const appInfo = Gio.AppInfo.create_from_commandline(
-                `kitty bash -c "bash '${scriptPath}'; read -p 'Drücke Enter zum Beenden...';"`,
+                `kitty bash -c "bash -c '${escapedPath}'; read -p 'Drücke Enter zum Beenden...';"`,
                 'kitty',
                 Gio.AppInfoCreateFlags.NONE
             );
