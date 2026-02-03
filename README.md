@@ -13,8 +13,9 @@ chmod +x csv-search-provider.sh
 
 ## Usage
 
-Place *.csv or *.txt files in the extension folder:
+Place your *.csv or *.txt files in the extension folder:
 `~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/`
+Two example-files already exist here after installation.
 
 ### Format
 
@@ -23,13 +24,14 @@ Each line has the format:
 Display text|teams-url/url/text/email/shell-script
 ```
 
-**Example** (e.g., `my.txt` in the extension folder):
+**Example** (e.g., `example.txt` in the extension folder):
 ```
 John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
+IBAN|DE12 3456 1234 1234 1234 00
+Debug CSV-Search-Provider|/home/stefan/Dokumente/CSV-Search-Provider/csv-search-provider.sh debug
+Ecosia Browser|https://ecosia.org
+John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
 Jane Doe|jane.doe@acme.com
-Clipboard-example|clipboard-content
-Ecosia|https://ecosia.org
-Debug Extension|/path/to/script.sh debug
 ```
 
 **Shell Scripts with Parameters:**
