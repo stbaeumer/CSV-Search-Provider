@@ -2,7 +2,8 @@
 
 GNOME Shell extension to search CSV and TXT files. Rows found in the CSV are converted into results in GNOME Shell search.
 
-<img width="1417" height="432" alt="grafik" src="https://github.com/user-attachments/assets/a3a8b81d-132c-499f-bca0-e0dac6b66101" />
+<img width="1380" height="682" alt="grafik" src="https://github.com/user-attachments/assets/435840b8-fd13-4ecf-8099-553f5ddc0548" />
+
 
 
 
