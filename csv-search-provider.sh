@@ -26,6 +26,7 @@ function install_extension() {
   echo "Extension installed and activated."
   echo "CSV/TXT files can be placed in $EXT_DEST."
   echo "Please restart gnome-shell or log out and log back in."
+  echo "Please activate the extension in the GNOME Extensions app or using the gnome-extensions command."
 }
 
 function uninstall_extension() {

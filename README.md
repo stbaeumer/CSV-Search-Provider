@@ -2,6 +2,10 @@
 
 GNOME Shell extension to search CSV and TXT files. Rows found in the CSV are converted into results in GNOME Shell search.
 
+## Credits
+
+The great icons are from https://icons8.com/.
+
 ## Installation
 
 ```bash
@@ -42,6 +46,16 @@ Ecosia Browser|https://ecosia.org
 John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
 Jane Doe|jane.doe@acme.com
 ```
+
+**Testride after installation**
+
+Press Super to open Gnome-shell search.
+
+1. Type in "John Doe"
+2. Type in "Jane Doe"
+3. Type in "IBAN"
+4. Type in "Ecosia"
+5. Type in "Debug CSV"
 
 **Shell Scripts with Parameters:**
 - Lines containing `.sh ` (with space) are treated as shell scripts with parameters
