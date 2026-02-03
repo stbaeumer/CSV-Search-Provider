@@ -2,9 +2,8 @@
 
 GNOME Shell extension to search CSV and TXT files. Rows found in the CSV are converted into results in GNOME Shell search.
 
-## Credits
+<img width="1351" height="413" alt="bildschirm" src="https://github.com/user-attachments/assets/55d0181b-caf9-4e5b-86f6-32f725cc0199" />
 
-The great icons are from https://icons8.com/.
 
 ## Installation
 
@@ -82,3 +81,8 @@ Simply toggle the extension off and on again in the extension manager. The new l
 ```bash
 ./csv-search-provider.sh debug
 ```
+
+
+## Credits
+
+The great icons are from https://icons8.com/.
