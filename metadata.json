@@ -10,5 +10,5 @@
     "name": "CSV-Search-Provider",
     "url": "https://github.com/stbaeumer/csv-search-provider/",
     "description": "Searches CSV and TXT files in the extension folder and shows all lines as results in GNOME Shell search.",
-    "version": 12
+    "version": 13
 }
