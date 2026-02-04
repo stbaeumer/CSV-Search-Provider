@@ -27,7 +27,9 @@ class CsvSearchProvider {
     // ICON-ZUWEISUNG
     //
     _getIconNameForContent(content) {
-        if (this._isUrl(content)) {
+        if (content.includes('PGP MESSAGE')) {
+            return 'pgp.png';
+        } else if (this._isUrl(content)) {
             if (content.toLowerCase().includes('team')) {
                 return 'teams.png';
             }
@@ -85,32 +87,52 @@ class CsvSearchProvider {
                     });
                     const text = new TextDecoder().decode(contents);
 
-                    const lines = text
-                        .split('\n')
-                        .map(l => l.trim())
-                        .filter(l => l.length > 0 && !l.startsWith('#'));
+                    const lines = text.split('\n');
 
+                    let currentEntry = null;
+                    
                     for (const line of lines) {
-                        const parts = line.split('|').map(p => p.trim());
-
-                        const displayText = (parts[0] || '').trim();
-                        const url = (parts[1] || '').trim();
+                        const trimmedLine = line.trim();
                         
-                        if (!displayText || !url) {
+                        // Kommentare überspringen
+                        if (trimmedLine.startsWith('#')) {
                             continue;
                         }
                         
-                        // Icon automatisch basierend auf Inhaltstyp zuweisen
-                        const iconName = this._getIconNameForContent(url);
-                        
-                        const entry = {
-                            displayText,
-                            url,
+                        // Neue Zeile beginnt, wenn der Delimiter "|" enthalten ist
+                        if (trimmedLine.includes('|')) {
+                            // Vorherigen Eintrag speichern, falls vorhanden
+                            if (currentEntry && currentEntry.displayText && currentEntry.url) {
+                                const iconName = this._getIconNameForContent(currentEntry.url);
+                                this._entries.push({
+                                    displayText: currentEntry.displayText,
+                                    url: currentEntry.url.trim(),
+                                    iconName,
+                                    filename,
+                                });
+                            }
+                            
+                            // Neuen Eintrag starten
+                            const parts = trimmedLine.split('|');
+                            currentEntry = {
+                                displayText: (parts[0] || '').trim(),
+                                url: (parts.slice(1).join('|') || '').trim(),
+                            };
+                        } else if (currentEntry) {
+                            // Mehrzeiliger Inhalt: zur URL hinzufügen (auch Leerzeilen)
+                            currentEntry.url += '\n' + trimmedLine;
+                        }
+                    }
+                    
+                    // Letzten Eintrag speichern
+                    if (currentEntry && currentEntry.displayText && currentEntry.url) {
+                        const iconName = this._getIconNameForContent(currentEntry.url);
+                        this._entries.push({
+                            displayText: currentEntry.displayText,
+                            url: currentEntry.url.trim(),
                             iconName,
                             filename,
-                        };
-
-                        this._entries.push(entry);
+                        });
                     }
                 } catch (e) {
                     logError(e, `Error loading file ${filename}`);
@@ -229,6 +251,17 @@ class CsvSearchProvider {
         try {
             const clipboard = St.Clipboard.get_default();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
+            
+            // Notification anzeigen
+            const title = 'In Zwischenablage kopiert';
+            const body = text.length > 50 ? text.substring(0, 50) + '...' : text;
+            const notification = new Main.MessageTray.Notification(
+                this._extension,
+                title,
+                body
+            );
+            Main.messageTray.add(notification);
+            notification.showNotification();
         } catch (e) {
             logError(e, 'Error copying to clipboard');
         }
