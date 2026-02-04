@@ -240,7 +240,23 @@ class CsvSearchProvider {
     }
 
     _isEmail(text) {
-        return text.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null;
+        const lines = text.split('\n');
+        for (const line of lines) {
+            const value = line.trim();
+            if (!value) {
+                continue;
+            }
+            if (value.startsWith('mailto:')) {
+                const email = value.substring('mailto:'.length).trim();
+                if (email.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null) {
+                    return true;
+                }
+            }
+            if (value.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     _isShellScript(text) {
