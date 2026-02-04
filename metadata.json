@@ -9,6 +9,6 @@
     "uuid": "csv-search-provider@stbaeumer.github.com",
     "name": "CSV-Search-Provider",
     "url": "https://github.com/stbaeumer/csv-search-provider/",
-    "description": "Searches CSV and TXT files in the extension folder and shows all lines as results in GNOME Shell search.",
-    "version": 13
+    "description": "Searches CSV and TXT files in the extension folder and shows all lines as results in GNOME Shell search. URLs open in browser, email addresses in mail client, shell scripts in terminal, and other text is copied to clipboard.",
+    "version": 12
 }
