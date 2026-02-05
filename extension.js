@@ -29,6 +29,8 @@ class CsvSearchProvider {
     _getIconNameForContent(content) {
         if (content.includes('PGP MESSAGE')) {
             return 'pgp.png';
+        } else if (this._isJoplinLink(content)) {
+            return 'joplin.png';
         } else if (this._isUrl(content)) {
             if (content.toLowerCase().includes('team')) {
                 return 'teams.png';
@@ -263,6 +265,10 @@ class CsvSearchProvider {
         return text.endsWith('.sh') || text.includes('.sh ');
     }
 
+    _isJoplinLink(text) {
+        return text.trim().startsWith('joplin://');
+    }
+
     _copyToClipboard(text) {
         try {
             const clipboard = St.Clipboard.get_default();
@@ -335,6 +341,17 @@ class CsvSearchProvider {
         }
     }
 
+    _openJoplinLink(url) {
+        try {
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.NONE
+            });
+            launcher.spawnv(['xdg-open', url.trim()]);
+        } catch (e) {
+            logError(e, `Error opening Joplin link ${url}`);
+        }
+    }
+
     activateResult(resultId, terms) {
         const index = parseInt(resultId);
         const entry = this._entries[index];
@@ -343,7 +360,9 @@ class CsvSearchProvider {
 
         const content = entry.url;
 
-        if (this._isUrl(content)) {
+        if (this._isJoplinLink(content)) {
+            this._openJoplinLink(content);
+        } else if (this._isUrl(content)) {
             this._openUrl(content);
         } else if (this._isEmail(content)) {
             this._openEmail(content);
