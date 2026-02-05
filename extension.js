@@ -29,6 +29,10 @@ class CsvSearchProvider {
     _getIconNameForContent(content) {
         if (content.includes('PGP MESSAGE')) {
             return 'pgp.png';
+        } else if (this._isOtpEntry(content)) {
+            return 'otp.png';
+        } else if (this._isPassEntry(content)) {
+            return 'pass.png';
         } else if (this._isJoplinLink(content)) {
             return 'joplin.png';
         } else if (this._isUrl(content)) {
@@ -269,6 +273,75 @@ class CsvSearchProvider {
         return text.trim().startsWith('joplin://');
     }
 
+    _isPassEntry(text) {
+        return text.trim() === 'pass';
+    }
+
+    _isOtpEntry(text) {
+        const value = text.trim();
+        return value === 'otp' || value.startsWith('otpauth');
+    }
+
+    _copyPassToClipboard(passEntry) {
+        try {
+            const entryName = passEntry.trim();
+            if (!entryName) {
+                return;
+            }
+
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            });
+            const process = launcher.spawnv(['pass', 'show', entryName]);
+
+            const stdout = process.get_stdout_pipe();
+            const dataStream = new Gio.DataInputStream({
+                base_stream: stdout
+            });
+
+            const [line] = dataStream.read_line_utf8(null);
+            dataStream.close(null);
+
+            if (!line) {
+                return;
+            }
+
+            this._copyToClipboard(line);
+        } catch (e) {
+            logError(e, `Error copying pass entry ${passEntry}`);
+        }
+    }
+
+    _copyOtpToClipboard(otpEntry) {
+        try {
+            const entryName = otpEntry.trim();
+            if (!entryName) {
+                return;
+            }
+
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            });
+            const process = launcher.spawnv(['pass', 'otp', entryName]);
+
+            const stdout = process.get_stdout_pipe();
+            const dataStream = new Gio.DataInputStream({
+                base_stream: stdout
+            });
+
+            const [line] = dataStream.read_line_utf8(null);
+            dataStream.close(null);
+
+            if (!line) {
+                return;
+            }
+
+            this._copyToClipboard(line);
+        } catch (e) {
+            logError(e, `Error copying OTP for ${otpEntry}`);
+        }
+    }
+
     _copyToClipboard(text) {
         try {
             const clipboard = St.Clipboard.get_default();
@@ -360,7 +433,11 @@ class CsvSearchProvider {
 
         const content = entry.url;
 
-        if (this._isJoplinLink(content)) {
+        if (this._isOtpEntry(content)) {
+            this._copyOtpToClipboard(entry.displayText);
+        } else if (this._isPassEntry(content)) {
+            this._copyPassToClipboard(entry.displayText);
+        } else if (this._isJoplinLink(content)) {
             this._openJoplinLink(content);
         } else if (this._isUrl(content)) {
             this._openUrl(content);

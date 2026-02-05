@@ -38,6 +38,11 @@ Each line has the format:
 Display text|teams-url/url/text/email/shell-script
 ```
 
+**Special values in column 2:**
+- `pass` -> fetches password from pass database using column 1 as entry name -> copies to clipboard
+- `otp` -> fetches OTP from pass database using column 1 as entry name -> copies to clipboard
+- `joplin...` -> opens Joplin using the selected entry (e.g. `joplin://x-callback-url/...`)
+
 **Example** (e.g., `example.txt` in the extension folder):
 ```
 John Doe|https://teams.microsoft.com/l/chat/0/0?users=john.doe@acme.com
