@@ -37,6 +37,36 @@ Each line has the format:
 ```
 Display text|teams-url/url/text/email/shell-script
 ```
+### Example #1 - copy to clipboard
+
+https://github.com/user-attachments/assets/01122675-b0c3-4a1a-b874-8348a6e42cb1
+
+### Example #2 - open in browser
+
+https://github.com/user-attachments/assets/f76c1272-cfa2-42ba-bda8-a1409a45de31
+
+### Example #3 - open new mail dialog
+
+https://github.com/user-attachments/assets/4afd04f8-8740-4303-b93f-eb2c2f550fa0
+
+### Example #4 - open in joplin
+
+https://github.com/user-attachments/assets/6d50fc52-ada1-42fa-a0c2-9b12a259ab5c
+
+### Example #5 - copy multiline pgp-message to clipboard
+
+https://github.com/user-attachments/assets/106f6af4-c287-4ec0-bac8-a6021c805055
+
+### Example #6 - get password from pass and copy to clipboard
+
+https://github.com/user-attachments/assets/b4fe7c05-0000-4f26-bead-faab8bf1a41c
+
+### Example #7 - get otp from pass and copy to clipboard
+
+https://github.com/user-attachments/assets/90261af2-cace-4fd4-a3fa-0d00d731a03b
+
+### Example #8 - run *.sh-script 
+
 
 **Special values in column 2:**
 - `pass` -> fetches password from pass database using column 1 as entry name -> copies to clipboard
