@@ -14,6 +14,17 @@ chmod +x csv-search-provider.sh
 ./csv-search-provider.sh install
 ```
 
+**Optional:** For shell script execution, the extension prefers `kitty` terminal emulator. If not installed, the default system terminal will be used. To install kitty:
+
+```bash
+sudo apt install kitty  # Debian/Ubuntu
+# or
+sudo dnf install kitty  # Fedora
+# or
+sudo pacman -S kitty    # Arch Linux
+```
+
+
 ## Usage
 
 Place your *.csv or *.txt files in the extension folder:
