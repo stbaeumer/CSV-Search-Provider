@@ -312,7 +312,7 @@ class CsvSearchProvider {
         }
     }
 
-    _copyOtpToClipboard(otpEntry) {
+    async _copyOtpToClipboard(otpEntry) {
         try {
             const entryName = otpEntry.trim();
             if (!entryName) {
@@ -325,18 +325,26 @@ class CsvSearchProvider {
             const process = launcher.spawnv(['pass', 'otp', entryName]);
 
             const stdout = process.get_stdout_pipe();
-            const dataStream = new Gio.DataInputStream({
-                base_stream: stdout
+            
+            await new Promise((resolve, reject) => {
+                const dataStream = new Gio.DataInputStream({
+                    base_stream: stdout
+                });
+
+                dataStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+                    try {
+                        const [line] = stream.read_line_finish_utf8(result);
+                        dataStream.close(null);
+                        
+                        if (line) {
+                            this._copyToClipboard(line.trim());
+                        }
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
             });
-
-            const [line] = dataStream.read_line_utf8(null);
-            dataStream.close(null);
-
-            if (!line) {
-                return;
-            }
-
-            this._copyToClipboard(line);
         } catch (e) {
             logError(e, `Error copying OTP for ${otpEntry}`);
         }

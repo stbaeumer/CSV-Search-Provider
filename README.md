@@ -92,4 +92,4 @@ Simply toggle the extension off and on again in the extension manager. The new l
 
 ## Credits
 
-The great icons are from https://icons8.com/.
+The great icons are from https://icons8.com/ & https://www.flaticon.com/.
