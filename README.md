@@ -5,8 +5,6 @@ GNOME Shell extension to search CSV and TXT files. Rows found in the CSV are con
 <img width="1380" height="682" alt="grafik" src="https://github.com/user-attachments/assets/435840b8-fd13-4ecf-8099-553f5ddc0548" />
 
 
-
-
 ## Installation
 
 ```bash
@@ -14,15 +12,6 @@ unzip csv-search-provider-*.zip
 cd CSV-Search-Provider
 chmod +x csv-search-provider.sh
 ./csv-search-provider.sh install
-```
-
-**Optional:** For shell script execution, the extension prefers `kitty` terminal emulator. If not installed, the default system terminal will be used. To install kitty:
-```bash
-sudo apt install kitty  # Debian/Ubuntu
-# or
-sudo dnf install kitty  # Fedora
-# or
-sudo pacman -S kitty    # Arch Linux
 ```
 
 ## Usage
@@ -43,33 +32,35 @@ key|value
 
 ## Example #1 - copy to clipboard
 
+:warning: default rule, unless any of the following rules apply
+
 https://github.com/user-attachments/assets/01122675-b0c3-4a1a-b874-8348a6e42cb1
 
 ## Example #2 - open in browser
 
-:warning: works with value starting with `http`
+:warning: applies to any value that starts with `http`
 
 https://github.com/user-attachments/assets/f76c1272-cfa2-42ba-bda8-a1409a45de31
 
 ## Example #3 - open new mail dialog
 
-:warning: works with value being a `mail-address`
+:warning: applies to any value being a `mail-address`
 
 https://github.com/user-attachments/assets/4afd04f8-8740-4303-b93f-eb2c2f550fa0
 
 ## Example #4 - open in joplin
 
-:warning: works with value starting with `joplin://`
+:warning: applies to any value that starts with `joplin://`
 
 https://github.com/user-attachments/assets/6d50fc52-ada1-42fa-a0c2-9b12a259ab5c
 
 ## Example #5 - copy multiline pgp-message to clipboard
 
-:warning: works with all multiline values
+:warning: applies to any multiline value
 
 :warning: take care not to use `|` inside value
 
-:warning: gpg-icons used if value contains `PGP MESSAGE`
+:warning: gpg-icon used if value contains `PGP MESSAGE`
 
 https://github.com/user-attachments/assets/106f6af4-c287-4ec0-bac8-a6021c805055
 
@@ -95,7 +86,7 @@ https://github.com/user-attachments/assets/cc335c64-00f2-4f14-892d-4e92b5ce0f2e
 
 Lines starting with `#` are ignored.
 
-### Reload
+## Reload
 
 Simply toggle the extension off and on again in the extension manager. The new lines should then appear. If necessary, log out and back in.
 
@@ -116,11 +107,6 @@ Simply toggle the extension off and on again in the extension manager. The new l
 ### Create joplin.csv
 
 ```bash
-# ===== localhost:8384 öffnen =====
-echo "${ICON_INFO} Öffne localhost:8384..."
-WEBSEITE="http://localhost:8384"
-
-# ===== Erstelle CSV =====
 sqlite3 ~/.config/joplin-desktop/database.sqlite \
 ".mode list" \
 ".separator |" \
@@ -131,7 +117,6 @@ sqlite3 ~/.config/joplin-desktop/database.sqlite \
 ### Create pass.csv
 
 ```bash
-# Starte
 CSV_FILE="/home/stefan/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/pass.csv"
 
 echo "📝 Erstelle CSV-Datei: $CSV_FILE"
