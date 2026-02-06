@@ -3,8 +3,6 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
-import Clutter from 'gi://Clutter';
-import Meta from 'gi://Meta';
 
 class CsvSearchProvider {
     constructor(extension) {
@@ -23,9 +21,6 @@ class CsvSearchProvider {
         Main.overview.searchController.removeProvider(this);
     }
 
-    //
-    // ICON-ZUWEISUNG
-    //
     _getIconNameForContent(content) {
         if (content.includes('PGP MESSAGE')) {
             return 'pgp.png';
@@ -48,9 +43,6 @@ class CsvSearchProvider {
         return 'clipboard.png';
     }
 
-    //
-    // DATEN LADEN
-    //
     async _loadData() {
         this._entries = [];
 
@@ -68,7 +60,6 @@ class CsvSearchProvider {
             );
 
             let fileInfo;
-            let totalFiles = 0;
             
             while ((fileInfo = enumerator.next_file(null)) !== null) {
                 const filename = fileInfo.get_name();
@@ -77,7 +68,6 @@ class CsvSearchProvider {
                     continue;
                 }
 
-                totalFiles++;
                 const filePath = GLib.build_filenamev([this._dataDir, filename]);
                 const file = Gio.File.new_for_path(filePath);
 
@@ -100,14 +90,11 @@ class CsvSearchProvider {
                     for (const line of lines) {
                         const trimmedLine = line.trim();
                         
-                        // Kommentare überspringen
                         if (trimmedLine.startsWith('#')) {
                             continue;
                         }
                         
-                        // Neue Zeile beginnt, wenn der Delimiter "|" enthalten ist
                         if (trimmedLine.includes('|')) {
-                            // Vorherigen Eintrag speichern, falls vorhanden
                             if (currentEntry && currentEntry.displayText && currentEntry.url) {
                                 const iconName = this._getIconNameForContent(currentEntry.url);
                                 this._entries.push({
@@ -118,19 +105,16 @@ class CsvSearchProvider {
                                 });
                             }
                             
-                            // Neuen Eintrag starten
                             const parts = trimmedLine.split('|');
                             currentEntry = {
                                 displayText: (parts[0] || '').trim(),
                                 url: (parts.slice(1).join('|') || '').trim(),
                             };
                         } else if (currentEntry) {
-                            // Mehrzeiliger Inhalt: zur URL hinzufügen (auch Leerzeilen)
                             currentEntry.url += '\n' + trimmedLine;
                         }
                     }
                     
-                    // Letzten Eintrag speichern
                     if (currentEntry && currentEntry.displayText && currentEntry.url) {
                         const iconName = this._getIconNameForContent(currentEntry.url);
                         this._entries.push({
@@ -141,18 +125,15 @@ class CsvSearchProvider {
                         });
                     }
                 } catch (e) {
-                    logError(e, `Error loading file ${filename}`);
+                    this._logError(e, 'load file');
                 }
             }
 
         } catch (e) {
-            logError(e, `Error accessing data directory`);
+            this._logError(e, 'access data directory');
         }
     }
 
-    //
-    // SUCHE
-    //
     _matchEntry(entry, query) {
         const q = query.toLowerCase();
         return entry.displayText.toLowerCase().includes(q);
@@ -181,9 +162,6 @@ class CsvSearchProvider {
         return results.slice(0, max);
     }
 
-    //
-    // ICONS
-    //
     _getIconForEntry(entry) {
         const iconName = entry.iconName;
         const extensionPath = this._extension.path;
@@ -198,9 +176,6 @@ class CsvSearchProvider {
         return null;
     }
 
-    //
-    // METADATEN
-    //
     getResultMeta(resultId) {
         const index = parseInt(resultId);
         const entry = this._entries[index];
@@ -238,9 +213,37 @@ class CsvSearchProvider {
         return metas;
     }
 
-    //
-    // AKTIONEN
-    //
+    _spawnCommand(args, flags = Gio.SubprocessFlags.NONE) {
+        const launcher = new Gio.SubprocessLauncher({ flags });
+        return launcher.spawnv(args);
+    }
+
+    _logError(error, message) {
+        logError(error, `CSV Search: ${message}`);
+    }
+
+    _readFirstLineSync(stream) {
+        const dataStream = new Gio.DataInputStream({ base_stream: stream });
+        const [line] = dataStream.read_line_utf8(null);
+        dataStream.close(null);
+        return line;
+    }
+
+    _readFirstLineAsync(stream) {
+        return new Promise((resolve, reject) => {
+            const dataStream = new Gio.DataInputStream({ base_stream: stream });
+            dataStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (s, result) => {
+                try {
+                    const [line] = s.read_line_finish_utf8(result);
+                    dataStream.close(null);
+                    resolve(line);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+    }
+
     _isUrl(text) {
         return text.match(/^https?:\/\//i) !== null;
     }
@@ -289,26 +292,18 @@ class CsvSearchProvider {
                 return;
             }
 
-            const launcher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            });
-            const process = launcher.spawnv(['pass', 'show', entryName]);
-
-            const stdout = process.get_stdout_pipe();
-            const dataStream = new Gio.DataInputStream({
-                base_stream: stdout
-            });
-
-            const [line] = dataStream.read_line_utf8(null);
-            dataStream.close(null);
-
+            const process = this._spawnCommand(
+                ['pass', 'show', entryName],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
+            const line = this._readFirstLineSync(process.get_stdout_pipe());
             if (!line) {
                 return;
             }
 
             this._copyToClipboard(line);
         } catch (e) {
-            logError(e, `Error copying pass entry ${passEntry}`);
+            this._logError(e, 'copy pass entry');
         }
     }
 
@@ -319,34 +314,16 @@ class CsvSearchProvider {
                 return;
             }
 
-            const launcher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            });
-            const process = launcher.spawnv(['pass', 'otp', entryName]);
-
-            const stdout = process.get_stdout_pipe();
-            
-            await new Promise((resolve, reject) => {
-                const dataStream = new Gio.DataInputStream({
-                    base_stream: stdout
-                });
-
-                dataStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
-                    try {
-                        const [line] = stream.read_line_finish_utf8(result);
-                        dataStream.close(null);
-                        
-                        if (line) {
-                            this._copyToClipboard(line.trim());
-                        }
-                        resolve();
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            });
+            const process = this._spawnCommand(
+                ['pass', 'otp', entryName],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
+            const line = await this._readFirstLineAsync(process.get_stdout_pipe());
+            if (line) {
+                this._copyToClipboard(line.trim());
+            }
         } catch (e) {
-            logError(e, `Error copying OTP for ${otpEntry}`);
+            this._logError(e, 'copy otp');
         }
     }
 
@@ -355,81 +332,65 @@ class CsvSearchProvider {
             const clipboard = St.Clipboard.get_default();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
             
-            // Notification anzeigen
             const title = 'In Zwischenablage kopiert';
             const body = text.length > 50 ? text.substring(0, 50) + '...' : text;
-            const notification = new Main.MessageTray.Notification(
-                this._extension,
-                title,
-                body
-            );
-            Main.messageTray.add(notification);
-            notification.showNotification();
+            Main.notify(title, body);
         } catch (e) {
-            logError(e, 'Error copying to clipboard');
+            this._logError(e, 'copy to clipboard');
+        }
+    }
+
+    _launchUri(uri) {
+        try {
+            Gio.AppInfo.launch_default_for_uri(uri, null);
+            return true;
+        } catch (e) {
+            try {
+                this._spawnCommand(['xdg-open', uri]);
+                return true;
+            } catch (spawnError) {
+                this._logError(spawnError, 'open uri');
+                return false;
+            }
         }
     }
 
     _openUrl(url) {
         try {
-            Gio.AppInfo.launch_default_for_uri(url, null);
+            this._launchUri(url);
         } catch (e) {
-            logError(e, `Error opening URL ${url}`);
+            this._logError(e, 'open url');
         }
     }
 
     _openEmail(email) {
         try {
-            // Ensure we have a mailto: URI
             const mailtoUri = email.startsWith('mailto:') ? email : `mailto:${email}`;
-            
-            // Try default method first
-            try {
-                Gio.AppInfo.launch_default_for_uri(mailtoUri, null);
-                return;
-            } catch (e) {
-                // Fallback: use xdg-open
-                try {
-                    const launcher = new Gio.SubprocessLauncher({
-                        flags: Gio.SubprocessFlags.NONE
-                    });
-                    launcher.spawnv(['xdg-open', mailtoUri]);
-                } catch (spawnError) {
-                    logError(spawnError, `Error opening email with fallback`);
-                }
-            }
+            this._launchUri(mailtoUri);
         } catch (e) {
-            logError(e, `Error opening email ${email}`);
+            this._logError(e, 'open email');
         }
     }
 
     _openShellScript(scriptPath) {
         try {
-            const launcher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.NONE
-            });
-            
-            // Prüfe, ob kitty verfügbar ist
             const hasKitty = GLib.find_program_in_path('kitty') !== null;
             
             const args = hasKitty
                 ? ['kitty', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`]
                 : ['x-terminal-emulator', '-e', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`];
             
-            launcher.spawnv(args);
+            this._spawnCommand(args);
         } catch (e) {
-            logError(e, `Error opening shell script ${scriptPath}`);
+            this._logError(e, 'open shell script');
         }
     }
 
     _openJoplinLink(url) {
         try {
-            const launcher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.NONE
-            });
-            launcher.spawnv(['xdg-open', url.trim()]);
+            this._launchUri(url.trim());
         } catch (e) {
-            logError(e, `Error opening Joplin link ${url}`);
+            this._logError(e, 'open joplin link');
         }
     }
 
@@ -458,9 +419,6 @@ class CsvSearchProvider {
         }
     }
 
-    //
-    // PROVIDER-INFOS
-    //
     getName() {
         return 'csv-search-provider';
     }
