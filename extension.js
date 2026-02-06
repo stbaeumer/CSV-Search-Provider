@@ -332,7 +332,7 @@ class CsvSearchProvider {
             const clipboard = St.Clipboard.get_default();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
             
-            const title = 'In Zwischenablage kopiert';
+            const title = 'Copied to clipboard';
             const body = text.length > 50 ? text.substring(0, 50) + '...' : text;
             Main.notify(title, body);
         } catch (e) {
@@ -377,8 +377,8 @@ class CsvSearchProvider {
             const hasKitty = GLib.find_program_in_path('kitty') !== null;
             
             const args = hasKitty
-                ? ['kitty', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`]
-                : ['x-terminal-emulator', '-e', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Drücke Enter zum Beenden...'`];
+                ? ['kitty', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Press Enter to exit...'`]
+                : ['x-terminal-emulator', '-e', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Press Enter to exit...'`];
             
             this._spawnCommand(args);
         } catch (e) {

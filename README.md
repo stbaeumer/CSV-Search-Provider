@@ -111,6 +111,14 @@ Simply toggle the extension off and on again in the extension manager. The new l
 ./csv-search-provider.sh debug
 ```
 
+## Troubleshooting
+
+- **pass/otp not found**: Install `pass` and optionally `pass-otp` for password integration. Commands must be in `$PATH`.
+- **Default terminal missing**: Install `x-terminal-emulator` or the extension will use no terminal for shell scripts. Prefer `kitty` for best experience.
+- **xdg-open not working**: Some URI schemes may not be configured. Set up default applications in system settings.
+- **No results**: Ensure CSV/TXT files are in the extension directory. Comments (lines starting with `#`) are ignored.
+- **Multiline values fail**: Avoid using `|` inside multiline values; use it only as field separator.
+
 ## Tips & tricks
 
 ### Create joplin.csv
@@ -128,32 +136,30 @@ sqlite3 ~/.config/joplin-desktop/database.sqlite \
 ```bash
 CSV_FILE="/home/stefan/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/pass.csv"
 
-echo "📝 Erstelle CSV-Datei: $CSV_FILE"
+echo "📝 Creating CSV file: $CSV_FILE"
 echo "name|pass" > "$CSV_FILE"
 
-echo "🔍 Suche nach Passwort-Einträgen..."
+echo "🔍 Searching for password entries..."
 for file in $(find ~/.password-store -name "*.gpg"); do
     entry="${file#$HOME/.password-store/}"
     entry="${entry%.gpg}"
     content=$(pass show "$entry")
     
-    # Prüfe auf otpauth URLs
     if echo "$content" | grep -q "otpauth://"; then
-        echo "🔐 OTP gefunden: $entry"
+        echo "🔐 OTP found: $entry"
         echo "$entry|otp" >> "$CSV_FILE"
     else
-        # Prüfe auf Passwort
         password=$(echo "$content" | head -n 1)
         if [ -n "$password" ]; then
-            echo "🔑 Passwort gefunden: $entry"
+            echo "🔑 Password found: $entry"
             echo "$entry|pass" >> "$CSV_FILE"
         else
-            echo "⏭️  Leer übersprungen: $entry"
+            echo "⏭️  Skipped empty: $entry"
         fi
     fi
 done
 
-echo "✅ CSV-Datei erfolgreich erstellt"
+echo "✅ CSV file created successfully"
 ```
 
 ## Credits
