@@ -1,6 +1,6 @@
 # CSV-Search-Provider
 
-GNOME Shell extension to search CSV and TXT files. Rows found in the CSV are converted into results in GNOME Shell search.
+GNOME Shell extension to search *.csv and *.txt files. Rows found in the files are converted into results in GNOME Shell search.
 
 <img width="1380" height="682" alt="grafik" src="https://github.com/user-attachments/assets/435840b8-fd13-4ecf-8099-553f5ddc0548" />
 
@@ -16,9 +16,8 @@ chmod +x csv-search-provider.sh
 
 ## Usage
 
-Place your *.csv or *.txt file(s) in the extension folder:
-`~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/`
-Two example-files already exist here after installation. Type 'Jane Doe' in Gnome Shell to see if extension installed properly and to get a first impression.
+Place your *.csv or *.txt file(s) in config folder: `~/.config/csv-search-provider` or extension folder.
+Two example-files already exist in extension folder `~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/` after installation. Type 'Jane Doe' in Gnome Shell to see if extension installed properly and to get a first impression.
 
 ### CSV/TXT-Format
 
@@ -31,6 +30,8 @@ key|value
 :warning: use `|` as delimiter.
 
 :warning: no header 
+
+Continuation lines in multiline values are kept as written.
 
 ### Actions
 
@@ -66,7 +67,35 @@ https://github.com/user-attachments/assets/b4fe7c05-0000-4f26-bead-faab8bf1a41c
 ## Example 4.2 - otp
 Action: otp: run pass-otp and copy result to clipboard (value is 'otp')
 
-:warning: Add otp like this: ```pass otp append webuntis```
+To add OTP support to a `pass` entry, first make sure the entry exists. If it does not, create it:
+
+```bash
+pass insert GITHUBSECRET
+```
+
+Get the OTP setup key or `otpauth://` URI from the service's two-factor authentication setup. If the service gives you a setup key instead of a URI, build a URI in this format:
+
+```text
+otpauth://totp/ISSUER:ACCOUNT?secret=BASE32_SECRET&issuer=ISSUER
+```
+
+Replace the placeholders with the issuer, account name, and the service-provided Base32 secret. Do not use your password or a current six-digit code. Then attach the URI to the `pass` entry:
+
+```bash
+pass otp append GITHUBSECRET
+```
+
+When prompted, paste the complete URI twice. Treat the URI and secret as highly sensitive: anyone who obtains them may be able to generate your OTP codes. Verify the entry in a terminal:
+
+```bash
+pass otp GITHUBSECRET
+```
+
+Use the same entry name in the CSV/TXT file:
+
+```text
+GITHUBSECRET|otp
+```
 
 https://github.com/user-attachments/assets/90261af2-cace-4fd4-a3fa-0d00d731a03b
 
@@ -120,12 +149,24 @@ Simply toggle the extension off and on again in the extension manager. The new l
 ## Troubleshooting
 
 - **pass/otp not found**: Install `pass` and optionally `pass-otp` for password integration. Commands must be in `$PATH`.
+- **OTP does nothing**: Check that the matching password-store entry contains an OTP secret and that `pass otp GMAILSECRET` works in a terminal (replace `GMAILSECRET` with the entry name). The extension now shows an error notification if `pass otp` fails or returns no code.
 - **Default terminal missing**: Install `x-terminal-emulator` or the extension will use no terminal for shell scripts. Prefer `kitty` for best experience.
 - **xdg-open not working**: Some URI schemes may not be configured. Set up default applications in system settings.
 - **No results**: Ensure CSV/TXT files are in the extension directory. Comments (lines starting with `#`) are ignored. Re-installation might erase csv-files.
 - **Multiline values fail**: Avoid using `|` inside multiline values; use it only as field separator.
 
 ## Tips & tricks
+
+### Protect private data
+
+If your CSV/TXT files contain passwords, OTP-related entries, or other private data, restrict access to the config directory and its files:
+
+```bash
+chmod 700 ~/.config/csv-search-provider
+chmod 600 ~/.config/csv-search-provider/*.csv ~/.config/csv-search-provider/*.txt
+```
+
+Run these commands after creating the directory and adding files. They allow your user account to access the files while denying access to other local users. Programs running as your user and the root user can still access them.
 
 ### Create joplin.csv
 
@@ -167,6 +208,31 @@ done
 
 echo "✅ CSV file created successfully"
 ```
+
+### Change icons
+
+To use your own icons, replace the PNG files in the extension's `icons` folder. Keep the existing filenames so the extension can find them. The folder is usually:
+
+```text
+~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/icons/
+```
+
+The icon is selected automatically based on the value in the CSV/TXT entry. Replace the corresponding file:
+
+| Entry type | Icon file |
+|------------|-----------|
+| PGP message | `pgp.png` |
+| OTP | `otp.png` |
+| Password (`pass`) | `pass.png` |
+| Joplin link | `joplin.png` |
+| URL containing `team` | `teams.png` |
+| Other URL | `browser.png` |
+| Email | `mail.png` |
+| Shell script | `shell.png` |
+| Other values | `clipboard.png` |
+
+Use PNG images and retain the filenames shown above. After replacing an icon, reload the extension (or log out and back in) to see the change.
+
 
 ## Credits
 

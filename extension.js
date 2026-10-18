@@ -4,143 +4,214 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
+const CLIPBOARD_CLEAR_SECONDS = 20;
+
 class CsvSearchProvider {
     constructor(extension) {
         this._extension = extension;
         this.id = extension.uuid;
         this._entries = [];
         this._dataDir = extension.path;
+        this._clipboardTimeoutId = 0;
     }
 
     enable() {
-        this._loadData();
+        this._loadPromise = this._loadData();
         Main.overview.searchController.addProvider(this);
     }
 
     disable() {
         Main.overview.searchController.removeProvider(this);
+
+        if (this._clipboardTimeoutId) {
+            GLib.Source.remove(this._clipboardTimeoutId);
+            this._clipboardTimeoutId = 0;
+        }
     }
 
     _getIconNameForContent(content) {
-        if (content.includes('PGP MESSAGE')) {
-            return 'pgp.png';
-        } else if (this._isOtpEntry(content)) {
-            return 'otp.png';
-        } else if (this._isPassEntry(content)) {
-            return 'pass.png';
-        } else if (this._isJoplinLink(content)) {
-            return 'joplin.png';
-        } else if (this._isUrl(content)) {
-            if (content.toLowerCase().includes('team')) {
-                return 'teams.png';
-            }
-            return 'browser.png';
-        } else if (this._isEmail(content)) {
-            return 'mail.png';
-        } else if (this._isShellScript(content)) {
-            return 'shell.png';
+        switch (true) {
+            case content.includes('PGP MESSAGE'):
+                return 'pgp.png';
+
+            case this._isOtpEntry(content):
+                return 'otp.png';
+
+            case this._isPassEntry(content):
+                return 'pass.png';
+
+            case this._isJoplinLink(content):
+                return 'joplin.png';
+
+            case this._isUrl(content):
+                return content.toLowerCase().includes('team')
+                    ? 'teams.png'
+                    : 'browser.png';
+
+            case this._isEmail(content):
+                return 'mail.png';
+
+            case this._isShellScript(content):
+                return 'shell.png';
+
+            default:
+                return 'clipboard.png';
         }
-        return 'clipboard.png';
     }
 
     async _loadData() {
         this._entries = [];
 
-        const dataDir = Gio.File.new_for_path(this._dataDir);
-        
-        if (!dataDir.query_exists(null)) {
-            return;
-        }
+        const dataDirs = [
+            this._dataDir,
+            GLib.build_filenamev([
+                GLib.get_user_config_dir(),
+                'csv-search-provider',
+            ]),
+        ];
 
-        try {
-            const enumerator = dataDir.enumerate_children(
-                'standard::name,standard::type',
-                Gio.FileQueryInfoFlags.NONE,
-                null
-            );
+        for (const dataDirPath of dataDirs) {
+            const dataDir = Gio.File.new_for_path(dataDirPath);
 
-            let fileInfo;
-            
-            while ((fileInfo = enumerator.next_file(null)) !== null) {
-                const filename = fileInfo.get_name();
-                
-                if (!filename.endsWith('.csv') && !filename.endsWith('.txt')) {
-                    continue;
+            if (!dataDir.query_exists(null))
+                continue;
+
+            let enumerator;
+
+            try {
+                enumerator = dataDir.enumerate_children(
+                    'standard::name,standard::type',
+                    Gio.FileQueryInfoFlags.NONE,
+                    null
+                );
+
+                let fileInfo;
+
+                while ((fileInfo = enumerator.next_file(null)) !== null) {
+                    const filename = fileInfo.get_name();
+
+                    if (!filename.endsWith('.csv') &&
+                        !filename.endsWith('.txt')) {
+                        continue;
+                    }
+
+                    const filePath = GLib.build_filenamev([
+                        dataDirPath,
+                        filename,
+                    ]);
+
+                    const file = Gio.File.new_for_path(filePath);
+
+                    try {
+                        const [, contents] = await new Promise(
+                            (resolve, reject) => {
+                                file.load_contents_async(
+                                    null,
+                                    (source, result) => {
+                                        try {
+                                            resolve(
+                                                source.load_contents_finish(
+                                                    result
+                                                )
+                                            );
+                                        } catch (error) {
+                                            reject(error);
+                                        }
+                                    }
+                                );
+                            }
+                        );
+
+                        this._parseDataFile(
+                            new TextDecoder().decode(contents)
+                        );
+                    } catch (error) {
+                        this._logError(error, `load file ${filename}`);
+                    }
                 }
-
-                const filePath = GLib.build_filenamev([this._dataDir, filename]);
-                const file = Gio.File.new_for_path(filePath);
-
-                try {
-                    const [, contents] = await new Promise((resolve, reject) => {
-                        file.load_contents_async(null, (source, result) => {
-                            try {
-                                resolve(source.load_contents_finish(result));
-                            } catch (e) {
-                                reject(e);
-                            }
-                        });
-                    });
-                    const text = new TextDecoder().decode(contents);
-
-                    const lines = text.split('\n');
-
-                    let currentEntry = null;
-                    
-                    for (const line of lines) {
-                        const trimmedLine = line.trim();
-                        
-                        if (trimmedLine.startsWith('#')) {
-                            continue;
-                        }
-                        
-                        if (trimmedLine.includes('|')) {
-                            if (currentEntry && currentEntry.displayText && currentEntry.url) {
-                                const iconName = this._getIconNameForContent(currentEntry.url);
-                                this._entries.push({
-                                    displayText: currentEntry.displayText,
-                                    url: currentEntry.url.trim(),
-                                    iconName,
-                                    filename,
-                                });
-                            }
-                            
-                            const parts = trimmedLine.split('|');
-                            currentEntry = {
-                                displayText: (parts[0] || '').trim(),
-                                url: (parts.slice(1).join('|') || '').trim(),
-                            };
-                        } else if (currentEntry) {
-                            currentEntry.url += '\n' + trimmedLine;
-                        }
+            } catch (error) {
+                this._logError(
+                    error,
+                    `access data directory ${dataDirPath}`
+                );
+            } finally {
+                if (enumerator) {
+                    try {
+                        enumerator.close(null);
+                    } catch (error) {
+                        this._logError(
+                            error,
+                            `close data directory ${dataDirPath}`
+                        );
                     }
-                    
-                    if (currentEntry && currentEntry.displayText && currentEntry.url) {
-                        const iconName = this._getIconNameForContent(currentEntry.url);
-                        this._entries.push({
-                            displayText: currentEntry.displayText,
-                            url: currentEntry.url.trim(),
-                            iconName,
-                            filename,
-                        });
-                    }
-                } catch (e) {
-                    this._logError(e, 'load file');
                 }
             }
-
-        } catch (e) {
-            this._logError(e, 'access data directory');
         }
+    }
+
+    _parseDataFile(text) {
+        const lines = text.split(/\r?\n/);
+
+        if (lines.at(-1) === '')
+            lines.pop();
+
+        let currentEntry = null;
+
+        const addCurrentEntry = () => {
+            if (!currentEntry ||
+                !currentEntry.displayText ||
+                !currentEntry.url) {
+                return;
+            }
+
+            this._entries.push({
+                displayText: currentEntry.displayText,
+                url: currentEntry.url,
+                iconName: this._getIconNameForContent(
+                    currentEntry.url
+                ),
+            });
+        };
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+
+            if (trimmedLine.startsWith('#'))
+                continue;
+
+            const separatorIndex = trimmedLine.indexOf('|');
+
+            if (separatorIndex !== -1) {
+                addCurrentEntry();
+
+                currentEntry = {
+                    displayText: trimmedLine
+                        .slice(0, separatorIndex)
+                        .trim(),
+
+                    url: trimmedLine
+                        .slice(separatorIndex + 1)
+                        .trim(),
+                };
+            } else if (currentEntry) {
+                currentEntry.url += `\n${line}`;
+            }
+        }
+
+        addCurrentEntry();
     }
 
     _matchEntry(entry, query) {
-        const q = query.toLowerCase();
-        return entry.displayText.toLowerCase().includes(q);
+        return entry.displayText
+            .toLowerCase()
+            .includes(query.toLowerCase());
     }
 
-    getInitialResultSet(terms) {
+    async getInitialResultSet(terms) {
+        await this._loadPromise;
+
         const query = terms.join(' ').trim();
+
         if (!query)
             return [];
 
@@ -154,7 +225,7 @@ class CsvSearchProvider {
         return results;
     }
 
-    getSubsearchResultSet(previousResults, terms) {
+    getSubsearchResultSet(_previousResults, terms) {
         return this.getInitialResultSet(terms);
     }
 
@@ -163,21 +234,22 @@ class CsvSearchProvider {
     }
 
     _getIconForEntry(entry) {
-        const iconName = entry.iconName;
-        const extensionPath = this._extension.path;
-        const iconPath = GLib.build_filenamev([extensionPath, 'icons', iconName]);
+        const iconPath = GLib.build_filenamev([
+            this._extension.path,
+            'icons',
+            entry.iconName,
+        ]);
 
-        let file = Gio.File.new_for_path(iconPath);
-        
-        if (file.query_exists(null)) {
-            return new Gio.FileIcon({ file });
-        }
-        
-        return null;
+        const file = Gio.File.new_for_path(iconPath);
+
+        if (!file.query_exists(null))
+            return null;
+
+        return new Gio.FileIcon({ file });
     }
 
     getResultMeta(resultId) {
-        const index = parseInt(resultId);
+        const index = Number.parseInt(resultId, 10);
         const entry = this._entries[index];
 
         if (!entry)
@@ -187,29 +259,35 @@ class CsvSearchProvider {
             id: resultId,
             name: entry.displayText,
             description: entry.url,
+
             createIcon: size => {
                 const gicon = this._getIconForEntry(entry);
+
                 if (!gicon) {
                     return new St.Icon({
                         icon_name: 'application-x-executable-symbolic',
                         icon_size: size,
                     });
                 }
+
                 return new St.Icon({
-                    gicon: gicon,
+                    gicon,
                     icon_size: size,
                 });
             },
         };
     }
 
-    async getResultMetas(resultIds, cancellable) {
+    async getResultMetas(resultIds) {
         const metas = [];
+
         for (const id of resultIds) {
             const meta = this.getResultMeta(id);
+
             if (meta)
                 metas.push(meta);
         }
+
         return metas;
     }
 
@@ -218,125 +296,159 @@ class CsvSearchProvider {
         return launcher.spawnv(args);
     }
 
+    async _runCommand(args) {
+        const process = this._spawnCommand(
+            args,
+            Gio.SubprocessFlags.STDOUT_PIPE |
+            Gio.SubprocessFlags.STDERR_PIPE
+        );
+
+        const [, stdout, stderr] = await new Promise(
+            (resolve, reject) => {
+                process.communicate_utf8_async(
+                    null,
+                    null,
+                    (source, result) => {
+                        try {
+                            resolve(
+                                source.communicate_utf8_finish(result)
+                            );
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }
+                );
+            }
+        );
+
+        if (!process.get_successful()) {
+            throw new Error(
+                stderr?.trim() || `Command failed: ${args[0]}`
+            );
+        }
+
+        return stdout ?? '';
+    }
+
     _logError(error, message) {
         logError(error, `CSV Search: ${message}`);
     }
 
-    _readFirstLineSync(stream) {
-        const dataStream = new Gio.DataInputStream({ base_stream: stream });
-        const [line] = dataStream.read_line_utf8(null);
-        dataStream.close(null);
-        return line;
-    }
+    async _copyPassToClipboard(passEntry) {
+        const entryName = passEntry.trim();
 
-    _readFirstLineAsync(stream) {
-        return new Promise((resolve, reject) => {
-            const dataStream = new Gio.DataInputStream({ base_stream: stream });
-            dataStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (s, result) => {
-                try {
-                    const [line] = s.read_line_finish_utf8(result);
-                    dataStream.close(null);
-                    resolve(line);
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        });
-    }
+        if (!entryName)
+            return;
 
-    _isUrl(text) {
-        return text.match(/^https?:\/\//i) !== null;
-    }
-
-    _isEmail(text) {
-        const lines = text.split('\n');
-        for (const line of lines) {
-            const value = line.trim();
-            if (!value) {
-                continue;
-            }
-            if (value.startsWith('mailto:')) {
-                const email = value.substring('mailto:'.length).trim();
-                if (email.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null) {
-                    return true;
-                }
-            }
-            if (value.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) !== null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    _isShellScript(text) {
-        return text.endsWith('.sh') || text.includes('.sh ');
-    }
-
-    _isJoplinLink(text) {
-        return text.trim().startsWith('joplin://');
-    }
-
-    _isPassEntry(text) {
-        return text.trim() === 'pass';
-    }
-
-    _isOtpEntry(text) {
-        const value = text.trim();
-        return value === 'otp' || value.startsWith('otpauth');
-    }
-
-    _copyPassToClipboard(passEntry) {
         try {
-            const entryName = passEntry.trim();
-            if (!entryName) {
+            const output = await this._runCommand([
+                'pass',
+                'show',
+                entryName,
+            ]);
+
+            // The first line contains the password.
+            const password = output.split(/\r?\n/, 1)[0];
+
+            if (!password) {
+                this._logError(
+                    new Error('Empty password output.'),
+                    'copy pass entry'
+                );
                 return;
             }
 
-            const process = this._spawnCommand(
-                ['pass', 'show', entryName],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            this._copyToClipboard(
+                password,
+                CLIPBOARD_CLEAR_SECONDS
             );
-            const line = this._readFirstLineSync(process.get_stdout_pipe());
-            if (!line) {
-                return;
-            }
+        } catch (error) {
+            this._logError(error, 'copy pass entry');
 
-            this._copyToClipboard(line);
-        } catch (e) {
-            this._logError(e, 'copy pass entry');
+            Main.notify(
+                'Password failed',
+                error.message || String(error)
+            );
         }
     }
 
     async _copyOtpToClipboard(otpEntry) {
-        try {
-            const entryName = otpEntry.trim();
-            if (!entryName) {
-                return;
-            }
+        const entryName = otpEntry.trim();
 
-            const process = this._spawnCommand(
-                ['pass', 'otp', entryName],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+        if (!entryName)
+            return;
+
+        try {
+            const output = await this._runCommand([
+                'pass',
+                'otp',
+                entryName,
+            ]);
+
+            const otp = output.trim();
+
+            if (!otp)
+                throw new Error('pass otp returned no OTP code.');
+
+            this._copyToClipboard(
+                otp,
+                CLIPBOARD_CLEAR_SECONDS
             );
-            const line = await this._readFirstLineAsync(process.get_stdout_pipe());
-            if (line) {
-                this._copyToClipboard(line.trim());
-            }
-        } catch (e) {
-            this._logError(e, 'copy otp');
+        } catch (error) {
+            this._logError(error, 'copy OTP');
+
+            Main.notify(
+                'OTP failed',
+                error.message || String(error)
+            );
         }
     }
 
-    _copyToClipboard(text) {
+    _copyToClipboard(text, clearAfterSeconds = 0) {
         try {
             const clipboard = St.Clipboard.get_default();
-            clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
-            
-            const title = 'Copied to clipboard';
-            const body = text.length > 50 ? text.substring(0, 50) + '...' : text;
-            Main.notify(title, body);
-        } catch (e) {
-            this._logError(e, 'copy to clipboard');
+
+            clipboard.set_text(
+                St.ClipboardType.CLIPBOARD,
+                text
+            );
+
+            Main.notify(
+                'Copied to clipboard',
+                'Content copied to clipboard.'
+            );
+
+            if (this._clipboardTimeoutId) {
+                GLib.Source.remove(this._clipboardTimeoutId);
+                this._clipboardTimeoutId = 0;
+            }
+
+            if (clearAfterSeconds > 0) {
+                this._clipboardTimeoutId = GLib.timeout_add_seconds(
+                    GLib.PRIORITY_DEFAULT,
+                    clearAfterSeconds,
+                    () => {
+                        this._clipboardTimeoutId = 0;
+
+                        // Do not erase newer clipboard contents.
+                        clipboard.get_text(
+                            St.ClipboardType.CLIPBOARD,
+                            (_clipboard, currentText) => {
+                                if (currentText === text) {
+                                    clipboard.set_text(
+                                        St.ClipboardType.CLIPBOARD,
+                                        ''
+                                    );
+                                }
+                            }
+                        );
+
+                        return GLib.SOURCE_REMOVE;
+                    }
+                );
+            }
+        } catch (error) {
+            this._logError(error, 'copy to clipboard');
         }
     }
 
@@ -344,59 +456,70 @@ class CsvSearchProvider {
         try {
             Gio.AppInfo.launch_default_for_uri(uri, null);
             return true;
-        } catch (e) {
+        } catch (error) {
             try {
                 this._spawnCommand(['xdg-open', uri]);
                 return true;
             } catch (spawnError) {
-                this._logError(spawnError, 'open uri');
+                this._logError(spawnError, 'open URI');
                 return false;
             }
         }
     }
 
     _openUrl(url) {
-        try {
-            this._launchUri(url);
-        } catch (e) {
-            this._logError(e, 'open url');
-        }
+        this._launchUri(url);
     }
 
     _openEmail(email) {
-        try {
-            const mailtoUri = email.startsWith('mailto:') ? email : `mailto:${email}`;
-            this._launchUri(mailtoUri);
-        } catch (e) {
-            this._logError(e, 'open email');
-        }
+        const mailtoUri = email.startsWith('mailto:')
+            ? email
+            : `mailto:${email}`;
+
+        this._launchUri(mailtoUri);
     }
 
     _openShellScript(scriptPath) {
         try {
-            const hasKitty = GLib.find_program_in_path('kitty') !== null;
-            
+            const hasKitty =
+                GLib.find_program_in_path('kitty') !== null;
+
+            const command =
+                `bash -- "$1"; read -r -p 'Press Enter to exit...'`;
+
             const args = hasKitty
-                ? ['kitty', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Press Enter to exit...'`]
-                : ['x-terminal-emulator', '-e', 'bash', '-c', `bash -c '${scriptPath}'; read -p 'Press Enter to exit...'`];
-            
+                ? [
+                    'kitty',
+                    'bash',
+                    '-c',
+                    command,
+                    'csv-search-provider',
+                    scriptPath,
+                ]
+                : [
+                    'x-terminal-emulator',
+                    '-e',
+                    'bash',
+                    '-c',
+                    command,
+                    'csv-search-provider',
+                    scriptPath,
+                ];
+
             this._spawnCommand(args);
-        } catch (e) {
-            this._logError(e, 'open shell script');
+        } catch (error) {
+            this._logError(error, 'open shell script');
         }
     }
 
     _openJoplinLink(url) {
-        try {
-            this._launchUri(url.trim());
-        } catch (e) {
-            this._logError(e, 'open joplin link');
-        }
+        this._launchUri(url.trim());
     }
 
-    activateResult(resultId, terms) {
-        const index = parseInt(resultId);
+    activateResult(resultId) {
+        const index = Number.parseInt(resultId, 10);
         const entry = this._entries[index];
+
         if (!entry)
             return;
 
@@ -419,6 +542,51 @@ class CsvSearchProvider {
         }
     }
 
+    _isUrl(text) {
+        return /^https?:\/\//i.test(text);
+    }
+
+    _isEmail(text) {
+        for (const line of text.split('\n')) {
+            const value = line.trim();
+
+            if (!value)
+                continue;
+
+            if (value.startsWith('mailto:')) {
+                const email = value
+                    .slice('mailto:'.length)
+                    .trim();
+
+                if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email))
+                    return true;
+            }
+
+            if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value))
+                return true;
+        }
+
+        return false;
+    }
+
+    _isShellScript(text) {
+        return text.endsWith('.sh') || text.includes('.sh ');
+    }
+
+    _isJoplinLink(text) {
+        return text.trim().startsWith('joplin://');
+    }
+
+    _isPassEntry(text) {
+        return text.trim() === 'pass';
+    }
+
+    _isOtpEntry(text) {
+        const value = text.trim();
+
+        return value === 'otp' || value.startsWith('otpauth');
+    }
+
     getName() {
         return 'csv-search-provider';
     }
@@ -428,19 +596,24 @@ class CsvSearchProvider {
     }
 
     getIcon() {
-        const defaultIconPath = GLib.build_filenamev([this._dataDir, 'icon.png']);
-        const file = Gio.File.new_for_path(defaultIconPath);
-        
-        if (file.query_exists(null)) {
+        const iconPath = GLib.build_filenamev([
+            this._dataDir,
+            'icon.png',
+        ]);
+
+        const file = Gio.File.new_for_path(iconPath);
+
+        if (file.query_exists(null))
             return new Gio.FileIcon({ file });
-        }
-        
-        return new Gio.ThemedIcon({ name: 'application-x-executable-symbolic' });
+
+        return new Gio.ThemedIcon({
+            name: 'application-x-executable-symbolic',
+        });
     }
 }
 
 export default class CsvSearchProviderExtension extends Extension {
-    enable() {        
+    enable() {
         this._provider = new CsvSearchProvider(this);
         this._provider.enable();
     }
