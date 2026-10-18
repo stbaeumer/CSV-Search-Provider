@@ -16,7 +16,7 @@ chmod +x csv-search-provider.sh
 
 ## Usage
 
-Place your *.csv or *.txt file(s) in config folder: `~/.config/csv-search-provider` or extension folder.
+Place your *.csv or *.txt file(s) in config folder `~/.config/csv-search-provider` or extension folder. The installer creates `~/.config/csv-search-provider` automatically.
 Two example-files already exist in extension folder `~/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/` after installation. Type 'Jane Doe' in Gnome Shell to see if extension installed properly and to get a first impression.
 
 ### CSV/TXT-Format
@@ -168,29 +168,83 @@ chmod 600 ~/.config/csv-search-provider/*.csv ~/.config/csv-search-provider/*.tx
 
 Run these commands after creating the directory and adding files. They allow your user account to access the files while denying access to other local users. Programs running as your user and the root user can still access them.
 
-### Create joplin.csv
+### Create generate-joplin-csv.sh
 
 ```bash
-sqlite3 ~/.config/joplin-desktop/database.sqlite \
-".mode list" \
-".separator |" \
-"SELECT title || '|joplin://x-callback-url/openNote?id=' || id FROM notes;" \
-> /home/stefan/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/joplin-notes.csv
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+CONFIG_DIR="$HOME/.config/csv-search-provider"
+CSV_FILE="$CONFIG_DIR/joplin-notes.csv"
+JOPLIN_DB="$HOME/.config/joplin-desktop/database.sqlite"
+
+# Check if sqlite3 is installed
+if ! command -v sqlite3 &>/dev/null; then
+    echo "❌ Error: sqlite3 is not installed. Please install it first (e.g., sudo apt install sqlite3)." >&2
+    exit 1
+fi
+
+# Check if the Joplin database exists
+if [ ! -f "$JOPLIN_DB" ]; then
+    echo "❌ Error: Joplin database not found at $JOPLIN_DB." >&2
+    exit 1
+fi
+
+# Create target directory if it doesn't exist
+mkdir -p "$CONFIG_DIR"
+
+echo "📝 Exporting Joplin notes to CSV: $CSV_FILE"
+
+# Extract notes from database
+sqlite3 "$JOPLIN_DB" \
+    ".mode list" \
+    ".separator |" \
+    "SELECT title || '|joplin://x-callback-url/openNote?id=' || id FROM notes WHERE is_conflict = 0 AND deleted_time = 0;" \
+    > "$CSV_FILE"
+
+# Count exported entries
+entry_count=$(wc -l < "$CSV_FILE" | tr -d ' ')
+
+echo "✅ Successfully exported $entry_count Joplin notes to: $CSV_FILE"
 ```
 
-### Create pass.csv
+### Create generate-pass-csv.sh
 
 ```bash
-CSV_FILE="/home/stefan/.local/share/gnome-shell/extensions/csv-search-provider@stbaeumer.github.com/pass.csv"
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+CONFIG_DIR="$HOME/.config/csv-search-provider"
+CSV_FILE="$CONFIG_DIR/pass.csv"
+PASSWORD_STORE_DIR="$HOME/.password-store"
+
+# Check if the password store directory exists
+if [ ! -d "$PASSWORD_STORE_DIR" ]; then
+    echo "❌ Error: Password store not found at $PASSWORD_STORE_DIR." >&2
+    exit 1
+fi
+
+# Create target directory if it doesn't exist
+mkdir -p "$CONFIG_DIR"
 
 echo "📝 Creating CSV file: $CSV_FILE"
 echo "name|pass" > "$CSV_FILE"
 
-echo "🔍 Searching for password entries..."
-for file in $(find ~/.password-store -name "*.gpg"); do
-    entry="${file#$HOME/.password-store/}"
+echo "🔍 Searching password store..."
+
+# Safe loop for file names (handles paths with spaces properly)
+while IFS= read -r -d '' file; do
+    # Strip the base path and .gpg extension to get the entry name
+    entry="${file#$PASSWORD_STORE_DIR/}"
     entry="${entry%.gpg}"
-    content=$(pass show "$entry")
+    
+    # Retrieve content from pass (suppress stderr errors)
+    if ! content=$(pass show "$entry" 2>/dev/null); then
+        echo "⚠️  Could not read entry: $entry"
+        continue
+    fi
     
     if echo "$content" | grep -q "otpauth://"; then
         echo "🔐 OTP found: $entry"
@@ -204,9 +258,9 @@ for file in $(find ~/.password-store -name "*.gpg"); do
             echo "⏭️  Skipped empty: $entry"
         fi
     fi
-done
+done < <(find "$PASSWORD_STORE_DIR" -type f -name "*.gpg" -print0)
 
-echo "✅ CSV file created successfully"
+echo "✅ CSV file successfully created at: $CSV_FILE"
 ```
 
 ### Change icons

@@ -6,11 +6,12 @@
 EXT_ID="csv-search-provider@stbaeumer.github.com"
 EXT_SRC="$(dirname "$0")"
 EXT_DEST="$HOME/.local/share/gnome-shell/extensions/$EXT_ID"
+CONFIG_DIR="$HOME/.config/csv-search-provider"
 
 function install_extension() {
   echo "Installing extension to $EXT_DEST ..."
   rm -rf "$EXT_DEST"
-  mkdir -p "$EXT_DEST"
+  mkdir -p "$EXT_DEST" "$CONFIG_DIR"
   cp -r "$EXT_SRC"/* "$EXT_DEST"/ 2>/dev/null || true
   rm -f "$EXT_DEST/csv-search-provider.sh"
   
@@ -25,6 +26,7 @@ function install_extension() {
   gnome-extensions enable "$EXT_ID"
   echo "Extension installed and activated."
   echo "CSV/TXT files can be placed in $EXT_DEST."
+  echo "User configuration directory: $CONFIG_DIR"
   echo "Please restart gnome-shell or log out and log back in."
   echo "Please activate the extension in the GNOME Extensions app or using the gnome-extensions command."
 }
