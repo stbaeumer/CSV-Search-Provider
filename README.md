@@ -33,6 +33,8 @@ key|value
 
 Continuation lines in multiline values are kept as written.
 
+For keys with three or more slash-separated blocks, search results show only the last two blocks. The complete key is still used for searching and actions. For example, `dienste/cloud/posteo.de/baeumer` is displayed as `posteo.de/baeumer`.
+
 ### Actions
 
 | Nr | Type | Value | Action |
@@ -40,9 +42,10 @@ Continuation lines in multiline values are kept as written.
 | 1 | URL | starts with `http://` or `https://` | Open in default browser |
 | 2 | Email | mail address or starts with `mailto:` | Open mail client |
 | 3 | Joplin | starts with `joplin://` | Open note link |
-| 4 | `pass` / `otp` | value is `pass` or `otp` | Run `pass` or `pass-otp` and copy result to clipboard |
-| 5 | Shell | ends with `.sh` | Run script in terminal |
-| 6 | Default / Fallback | any other value | Copy value to clipboard |
+| 4 | `pass` / `pass-<field>` / `otp` | value is `pass`, `pass-<field>`, or `otp` | Copy the password, a named field, or generate the OTP from the entry's `otpauth://` URI |
+| 5 | Shell script | contains a filename matching `*.sh` | Run that script in a terminal; the key is passed as its first argument |
+| 6 | Shell command | contains `|` | Run the command in a terminal |
+| 7 | Default / Fallback | any other value | Copy value to clipboard |
 
 ## Example 1 - URL
 Action: URL: open in default browser (value starts with http/https)
@@ -64,43 +67,52 @@ Action: pass: run pass and copy result to clipboard (value is 'pass')
 
 https://github.com/user-attachments/assets/b4fe7c05-0000-4f26-bead-faab8bf1a41c
 
-## Example 4.2 - otp
-Action: otp: run pass-otp and copy result to clipboard (value is 'otp')
+## Example 4.2 - pass and otp
 
-To add OTP support to a `pass` entry, first make sure the entry exists. If it does not, create it:
-
-```bash
-pass insert GITHUBSECRET
-```
-
-Get the OTP setup key or `otpauth://` URI from the service's two-factor authentication setup. If the service gives you a setup key instead of a URI, build a URI in this format:
+A `pass` entry can contain the password on its first line and additional fields below it. Put the OTP URI on its own line, either directly or after `otp:`:
 
 ```text
-otpauth://totp/ISSUER:ACCOUNT?secret=BASE32_SECRET&issuer=ISSUER
+Th3Gr3at3stPassw0rd
+username: JohnDoe
+email: john@example.com
+otp: otpauth://totp/example?secret=ABCDCBABCDCBABCD
+url: https://example.com
+pin: 1234
 ```
 
-Replace the placeholders with the issuer, account name, and the service-provided Base32 secret. Do not use your password or a current six-digit code. Then attach the URI to the `pass` entry:
-
-```bash
-pass otp append GITHUBSECRET
-```
-
-When prompted, paste the complete URI twice. Treat the URI and secret as highly sensitive: anyone who obtains them may be able to generate your OTP codes. Verify the entry in a terminal:
-
-```bash
-pass otp GITHUBSECRET
-```
-
-Use the same entry name in the CSV/TXT file:
+The `otp:` prefix is optional; a line beginning directly with `otpauth://` works as well. In the CSV/TXT file, use the pass entry name with `pass` to copy its first line, `otp` to generate and copy a code from its TOTP URI, or `pass-<field>` to copy a named field:
 
 ```text
-GITHUBSECRET|otp
+john.Doe|pass
+john.Doe|otp
+john.Doe|pass-pin
+john.Doe|pass-anwendungspasswort
 ```
+
+For `pass-<field>`, the extension copies the value after the matching `<field>:` line in the password entry (case-insensitive field name). For example, `pass-pin` copies `1234` from `pin: 1234`. If the field is missing, it copies `<field> does not exist in item` to the clipboard.
+
+Treat the password and OTP secret as highly sensitive. Anyone who obtains the OTP URI may be able to generate your codes.
 
 https://github.com/user-attachments/assets/90261af2-cace-4fd4-a3fa-0d00d731a03b
 
-## Example 5 - Shell
-Action: Shell: run script in terminal (value ends with .sh)
+## Example 5 - Shell script
+Action: If the value contains a filename ending in `.sh`, that script is run in a terminal. The key (the part before the CSV delimiter) is passed as the script's first argument; it does not need to end in `.sh`:
+
+```text
+posteo.de|xdgopen.sh
+google.de|xdgopen.sh
+```
+
+In this example, `xdgopen.sh` receives `posteo.de` or `google.de` as its first argument. A value that contains a shell pipeline, such as the next example, is run as a shell command instead.
+
+## Example 6 - Shell command
+Action: Run the value as a shell command in a terminal (value contains `|`):
+
+```text
+neomutt|pass neomutt-start.sh | bash
+```
+
+The command is run as written, so the pipeline feeds the output of `pass neomutt-start.sh` to `bash`.
 
 For shell script execution, the extension prefers `kitty` terminal emulator. If not installed, the default system terminal will be used. To install kitty:
 
@@ -114,12 +126,12 @@ sudo pacman -S kitty    # Arch Linux
 
 https://github.com/user-attachments/assets/cc335c64-00f2-4f14-892d-4e92b5ce0f2e
 
-## Example 6.1 - Default
+## Example 7.1 - Default
 Action: Default: copy value to clipboard (defaut)
 
 https://github.com/user-attachments/assets/01122675-b0c3-4a1a-b874-8348a6e42cb1
 
-## Example 6.2 - Default - Multiline
+## Example 7.2 - Default - Multiline
 Action: default copy with icon override when value contains `PGP MESSAGE`.
 Note: multiline values must not contain `|`.
 
@@ -148,12 +160,13 @@ Simply toggle the extension off and on again in the extension manager. The new l
 
 ## Troubleshooting
 
-- **pass/otp not found**: Install `pass` and optionally `pass-otp` for password integration. Commands must be in `$PATH`.
-- **OTP does nothing**: Check that the matching password-store entry contains an OTP secret and that `pass otp GMAILSECRET` works in a terminal (replace `GMAILSECRET` with the entry name). The extension now shows an error notification if `pass otp` fails or returns no code.
+- **pass/otp not found**: Install `pass` and `oathtool`; both commands must be in `$PATH`. The `pass-otp` extension is also needed for entries whose URI starts directly with `otpauth://`.
+- **OTP does nothing**: Check that the matching password-store entry contains an `otpauth://` URI. A URI on a line starting with `otp:` requires `oathtool`; a URI on a line starting directly with `otpauth://` requires the `pass-otp` extension. The extension shows an error notification if OTP generation fails.
 - **Default terminal missing**: Install `x-terminal-emulator` or the extension will use no terminal for shell scripts. Prefer `kitty` for best experience.
 - **xdg-open not working**: Some URI schemes may not be configured. Set up default applications in system settings.
 - **No results**: Ensure CSV/TXT files are in the extension directory. Comments (lines starting with `#`) are ignored. Re-installation might erase csv-files.
 - **Multiline values fail**: Avoid using `|` inside multiline values; use it only as field separator.
+- **not in the password-store**: Try `ln -s "$HOME/.passify" "$HOME/.password-store"`, if using different location.
 
 ## Tips & tricks
 
@@ -286,6 +299,26 @@ The icon is selected automatically based on the value in the CSV/TXT entry. Repl
 | Other values | `clipboard.png` |
 
 Use PNG images and retain the filenames shown above. After replacing an icon, reload the extension (or log out and back in) to see the change.
+
+### Per-entry icons
+
+You can override the standard icon for a CSV/TXT entry by adding an image named after one of the slash-separated parts of its key. The parts are checked from right to left, from specific to general. For `computer/repositories/github.com/github|otp`, the search order is:
+
+```text
+github
+github.com
+repositories
+computer
+```
+
+Thus, if both `github.com.png` and `computer.png` exist, `github.com.png` is used. Each name can use `.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, `.gif`, `.bmp`, or `.ico`, or have no extension. For each name, an image in `~/.config/csv-search-provider` takes precedence over one in `~/.local/share/icons`. For example:
+
+```text
+~/.config/csv-search-provider/github.com.png
+~/.local/share/icons/computer.png
+```
+
+If no matching image exists, the normal type-based icon is shown.
 
 
 ## Credits

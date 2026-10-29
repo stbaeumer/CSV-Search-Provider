@@ -1,3 +1,6 @@
 IBAN|DE12 3456 1234 1234 1234 00
 Debug CSV-Search-Provider|/home/stefan/Dokumente/CSV-Search-Provider/csv-search-provider.sh debug
 Ecosia Browser|https://ecosia.org
+neomutt|neomutt-start.sh
+dienste/cloud/posteo.de/baeumer|xdgopen.sh
+dienste/cloud/posteo.de/baeumer|pass-pin

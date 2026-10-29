@@ -5,6 +5,16 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const CLIPBOARD_CLEAR_SECONDS = 20;
+const CUSTOM_ICON_EXTENSIONS = [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.svg',
+    '.webp',
+    '.gif',
+    '.bmp',
+    '.ico',
+];
 
 class CsvSearchProvider {
     constructor(extension) {
@@ -159,13 +169,14 @@ class CsvSearchProvider {
 
         const addCurrentEntry = () => {
             if (!currentEntry ||
-                !currentEntry.displayText ||
+                !currentEntry.key ||
                 !currentEntry.url) {
                 return;
             }
 
             this._entries.push({
-                displayText: currentEntry.displayText,
+                key: currentEntry.key,
+                displayText: this._getDisplayText(currentEntry.key),
                 url: currentEntry.url,
                 iconName: this._getIconNameForContent(
                     currentEntry.url
@@ -185,7 +196,7 @@ class CsvSearchProvider {
                 addCurrentEntry();
 
                 currentEntry = {
-                    displayText: trimmedLine
+                    key: trimmedLine
                         .slice(0, separatorIndex)
                         .trim(),
 
@@ -201,8 +212,17 @@ class CsvSearchProvider {
         addCurrentEntry();
     }
 
+    _getDisplayText(key) {
+        const pathBlocks = key.split('/').filter(Boolean);
+
+        if (pathBlocks.length < 3)
+            return key;
+
+        return pathBlocks.slice(-2).join('/');
+    }
+
     _matchEntry(entry, query) {
-        return entry.displayText
+        return entry.key
             .toLowerCase()
             .includes(query.toLowerCase());
     }
@@ -234,6 +254,11 @@ class CsvSearchProvider {
     }
 
     _getIconForEntry(entry) {
+        const customIcon = this._getCustomIconForEntry(entry);
+
+        if (customIcon)
+            return customIcon;
+
         const iconPath = GLib.build_filenamev([
             this._extension.path,
             'icons',
@@ -246,6 +271,73 @@ class CsvSearchProvider {
             return null;
 
         return new Gio.FileIcon({ file });
+    }
+
+    _getCustomIconForEntry(entry) {
+        const key = entry.key;
+
+        if (!key || key.includes('\\')) {
+            return null;
+        }
+
+        const keyParts = key
+            .split('/')
+            .filter(part => part && part !== '.' && part !== '..')
+            .reverse();
+
+        const iconDirs = [
+            GLib.build_filenamev([
+                GLib.get_user_config_dir(),
+                'csv-search-provider',
+            ]),
+            GLib.build_filenamev([
+                GLib.get_user_data_dir(),
+                'icons',
+            ]),
+        ];
+
+        for (const keyPart of keyParts) {
+            const filenames = [
+                ...CUSTOM_ICON_EXTENSIONS.map(
+                    extension => `${keyPart}${extension}`
+                ),
+                keyPart,
+            ];
+
+            for (const iconDir of iconDirs) {
+                for (const filename of filenames) {
+                    const iconPath = GLib.build_filenamev([
+                        iconDir,
+                        filename,
+                    ]);
+                    const file = Gio.File.new_for_path(iconPath);
+
+                    if (!file.query_exists(null))
+                        continue;
+
+                    try {
+                        const info = file.query_info(
+                            'standard::type,standard::content-type',
+                            Gio.FileQueryInfoFlags.NONE,
+                            null
+                        );
+                        const contentType = info.get_content_type();
+
+                        if (info.get_file_type() === Gio.FileType.REGULAR &&
+                            contentType?.startsWith('image/')) {
+                            return new Gio.FileIcon({ file });
+                        }
+                    } catch (error) {
+                        this._logError(
+                            error,
+                            `read custom icon ${iconPath}`
+                        );
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     getResultMeta(resultId) {
@@ -296,17 +388,18 @@ class CsvSearchProvider {
         return launcher.spawnv(args);
     }
 
-    async _runCommand(args) {
+    async _runCommand(args, input = null) {
         const process = this._spawnCommand(
             args,
             Gio.SubprocessFlags.STDOUT_PIPE |
+            (input !== null ? Gio.SubprocessFlags.STDIN_PIPE : 0) |
             Gio.SubprocessFlags.STDERR_PIPE
         );
 
         const [, stdout, stderr] = await new Promise(
             (resolve, reject) => {
                 process.communicate_utf8_async(
-                    null,
+                    input,
                     null,
                     (source, result) => {
                         try {
@@ -372,8 +465,8 @@ class CsvSearchProvider {
         }
     }
 
-    async _copyOtpToClipboard(otpEntry) {
-        const entryName = otpEntry.trim();
+    async _copyPassFieldToClipboard(passEntry, fieldName) {
+        const entryName = passEntry.trim();
 
         if (!entryName)
             return;
@@ -381,9 +474,66 @@ class CsvSearchProvider {
         try {
             const output = await this._runCommand([
                 'pass',
-                'otp',
+                'show',
                 entryName,
             ]);
+            const fieldValue = output
+                .split(/\r?\n/)
+                .slice(1)
+                .map(line => {
+                    const separatorIndex = line.indexOf(':');
+
+                    if (separatorIndex === -1 ||
+                        line.slice(0, separatorIndex).trim().toLowerCase() !==
+                            fieldName.toLowerCase()) {
+                        return null;
+                    }
+
+                    return line.slice(separatorIndex + 1).trim();
+                })
+                .find(value => value !== null);
+
+            this._copyToClipboard(
+                fieldValue ?? `${fieldName} does not exist in item`,
+                fieldValue === undefined ? 0 : CLIPBOARD_CLEAR_SECONDS
+            );
+        } catch (error) {
+            this._logError(error, `copy pass field ${fieldName}`);
+
+            Main.notify(
+                'Password field failed',
+                error.message || String(error)
+            );
+        }
+    }
+
+    async _copyOtpToClipboard(otpEntry) {
+        const entryName = otpEntry.trim();
+
+        if (!entryName)
+            return;
+
+        try {
+            const passOutput = await this._runCommand([
+                'pass',
+                'show',
+                entryName,
+            ]);
+            const otpUriLine = passOutput
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .find(line => /^(?:otp:\s*)?otpauth:\/\//i.test(line));
+
+            const output = otpUriLine &&
+                !otpUriLine.toLowerCase().startsWith('otpauth://')
+                ? await this._generateOtpFromUri(
+                    otpUriLine.replace(/^otp:\s*/i, '')
+                )
+                : await this._runCommand([
+                    'pass',
+                    'otp',
+                    entryName,
+                ]);
 
             const otp = output.trim();
 
@@ -402,6 +552,57 @@ class CsvSearchProvider {
                 error.message || String(error)
             );
         }
+    }
+
+    async _generateOtpFromUri(uri) {
+        let parsedUri;
+
+        try {
+            parsedUri = new URL(uri);
+        } catch (_error) {
+            throw new Error('The pass entry contains an invalid OTP URI.');
+        }
+
+        if (parsedUri.protocol !== 'otpauth:' ||
+            parsedUri.hostname.toLowerCase() !== 'totp') {
+            throw new Error(
+                'Only TOTP URIs with an otp: prefix are supported.'
+            );
+        }
+
+        const parameters = parsedUri.searchParams;
+        const secret = parameters.get('secret');
+
+        if (!secret)
+            throw new Error('The OTP URI does not contain a secret.');
+
+        const args = ['oathtool', '--base32'];
+        const algorithm = parameters.get('algorithm');
+
+        if (algorithm)
+            args.push(`--totp=${algorithm.toLowerCase()}`);
+        else
+            args.push('--totp');
+
+        const period = parameters.get('period');
+
+        if (period) {
+            if (!/^\d+$/.test(period))
+                throw new Error('The OTP URI contains an invalid period.');
+
+            args.push(`--time-step-size=${period}s`);
+        }
+
+        const digits = parameters.get('digits');
+
+        if (digits) {
+            if (!/^\d+$/.test(digits))
+                throw new Error('The OTP URI contains an invalid digit count.');
+
+            args.push(`--digits=${digits}`);
+        }
+
+        return this._runCommand(args.concat('-'), secret);
     }
 
     _copyToClipboard(text, clearAfterSeconds = 0) {
@@ -479,13 +680,10 @@ class CsvSearchProvider {
         this._launchUri(mailtoUri);
     }
 
-    _openShellScript(scriptPath) {
+    _openInTerminal(command, commandArgs = []) {
         try {
             const hasKitty =
                 GLib.find_program_in_path('kitty') !== null;
-
-            const command =
-                `bash -- "$1"; read -r -p 'Press Enter to exit...'`;
 
             const args = hasKitty
                 ? [
@@ -494,7 +692,6 @@ class CsvSearchProvider {
                     '-c',
                     command,
                     'csv-search-provider',
-                    scriptPath,
                 ]
                 : [
                     'x-terminal-emulator',
@@ -503,13 +700,34 @@ class CsvSearchProvider {
                     '-c',
                     command,
                     'csv-search-provider',
-                    scriptPath,
                 ];
 
-            this._spawnCommand(args);
+            this._spawnCommand([...args, ...commandArgs]);
         } catch (error) {
-            this._logError(error, 'open shell script');
+            this._logError(error, 'open terminal command');
         }
+    }
+
+    _openShellScript(scriptPath, parameter) {
+        const command = [
+            'if [[ "$1" == */* ]]; then script="$1";',
+            'else script=$(command -v -- "$1") || {',
+            'printf "Script not found: %s\\n" "$1" >&2;',
+            "read -r -p 'Press Enter to exit...'; exit 127; }; fi;",
+            'bash -- "$script" "$2"; status=$?;',
+            "read -r -p 'Press Enter to exit...'; exit \"$status\";",
+        ].join(' ');
+
+        this._openInTerminal(command, [scriptPath, parameter]);
+    }
+
+    _openShellCommand(shellCommand) {
+        const command = [
+            'bash -c "$1"; status=$?;',
+            "read -r -p 'Press Enter to exit...'; exit \"$status\";",
+        ].join(' ');
+
+        this._openInTerminal(command, [shellCommand]);
     }
 
     _openJoplinLink(url) {
@@ -526,17 +744,31 @@ class CsvSearchProvider {
         const content = entry.url;
 
         if (this._isOtpEntry(content)) {
-            this._copyOtpToClipboard(entry.displayText);
+            this._copyOtpToClipboard(entry.key);
         } else if (this._isPassEntry(content)) {
-            this._copyPassToClipboard(entry.displayText);
+            const fieldName = this._getPassField(content);
+
+            if (fieldName) {
+                this._copyPassFieldToClipboard(
+                    entry.key,
+                    fieldName
+                );
+            } else {
+                this._copyPassToClipboard(entry.key);
+            }
         } else if (this._isJoplinLink(content)) {
             this._openJoplinLink(content);
         } else if (this._isUrl(content)) {
             this._openUrl(content);
         } else if (this._isEmail(content)) {
             this._openEmail(content);
+        } else if (this._isShellCommand(content)) {
+            this._openShellCommand(content);
         } else if (this._isShellScript(content)) {
-            this._openShellScript(content);
+            this._openShellScript(
+                this._getShellScriptPath(content),
+                entry.key
+            );
         } else {
             this._copyToClipboard(content);
         }
@@ -569,8 +801,20 @@ class CsvSearchProvider {
         return false;
     }
 
+    _getShellScriptPath(text) {
+        const match = text.match(
+            /(?:^|[\s"'=])([^\s"'|;&]*\.sh)(?=$|[\s"'|;&])/
+        );
+
+        return match?.[1] ?? null;
+    }
+
     _isShellScript(text) {
-        return text.endsWith('.sh') || text.includes('.sh ');
+        return this._getShellScriptPath(text) !== null;
+    }
+
+    _isShellCommand(text) {
+        return text.includes('|');
     }
 
     _isJoplinLink(text) {
@@ -578,7 +822,19 @@ class CsvSearchProvider {
     }
 
     _isPassEntry(text) {
-        return text.trim() === 'pass';
+        return text.trim().toLowerCase() === 'pass' ||
+            this._getPassField(text) !== null;
+    }
+
+    _getPassField(text) {
+        const value = text.trim();
+
+        if (!value.toLowerCase().startsWith('pass-'))
+            return null;
+
+        const fieldName = value.slice('pass-'.length).trim();
+
+        return fieldName || null;
     }
 
     _isOtpEntry(text) {
