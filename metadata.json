@@ -1,7 +1,9 @@
 {
     "shell-version": [
         "48",
-        "49"
+        "49",
+        "50",
+        "51"
     ],
     "uuid": "csv-search-provider@stbaeumer.github.com",
     "name": "CSV-Search-Provider",

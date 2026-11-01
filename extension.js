@@ -721,13 +721,50 @@ class CsvSearchProvider {
         this._openInTerminal(command, [scriptPath, parameter]);
     }
 
-    _openShellCommand(shellCommand) {
+    _runShellScriptInBackground(scriptPath, parameter) {
+        const configDirPath = GLib.build_filenamev([
+            GLib.get_user_config_dir(),
+            'csv-search-provider',
+        ]);
+        const configDir = Gio.File.new_for_path(configDirPath);
+        const logPath = GLib.build_filenamev([
+            configDirPath,
+            'error.txt',
+        ]);
         const command = [
-            'bash -c "$1"; status=$?;',
-            "read -r -p 'Press Enter to exit...'; exit \"$status\";",
+            'if [[ "$1" == */* ]]; then script="$1";',
+            'else script=$(command -v -- "$1" 2>> "$3") || {',
+            'printf "Script not found: %s\\n" "$1" >> "$3";',
+            'exit 127; }; fi;',
+            'bash -- "$script" "$2" >> "$3" 2>&1;',
+            'status=$?;',
+            'if (( status != 0 )); then',
+            'printf "Script exited with status %s: %s\\n" "$status" "$script" >> "$3";',
+            'fi;',
+            'exit "$status"',
         ].join(' ');
 
-        this._openInTerminal(command, [shellCommand]);
+        try {
+            if (!configDir.query_exists(null))
+                configDir.make_directory_with_parents(null);
+
+            this._spawnCommand([
+                'bash',
+                '-c',
+                command,
+                'csv-search-provider',
+                scriptPath,
+                parameter,
+                logPath,
+            ]);
+        } catch (error) {
+            this._logError(error, 'run background shell script');
+
+            Main.notify(
+                'Background script failed',
+                error.message || String(error)
+            );
+        }
     }
 
     _openJoplinLink(url) {
@@ -742,6 +779,7 @@ class CsvSearchProvider {
             return;
 
         const content = entry.url;
+        const shellScript = this._getShellScriptInfo(content);
 
         if (this._isOtpEntry(content)) {
             this._copyOtpToClipboard(entry.key);
@@ -762,13 +800,15 @@ class CsvSearchProvider {
             this._openUrl(content);
         } else if (this._isEmail(content)) {
             this._openEmail(content);
-        } else if (this._isShellCommand(content)) {
-            this._openShellCommand(content);
-        } else if (this._isShellScript(content)) {
-            this._openShellScript(
-                this._getShellScriptPath(content),
-                entry.key
-            );
+        } else if (shellScript) {
+            if (shellScript.background) {
+                this._runShellScriptInBackground(
+                    shellScript.path,
+                    entry.key
+                );
+            } else {
+                this._openShellScript(shellScript.path, entry.key);
+            }
         } else {
             this._copyToClipboard(content);
         }
@@ -801,20 +841,27 @@ class CsvSearchProvider {
         return false;
     }
 
-    _getShellScriptPath(text) {
-        const match = text.match(
+    _getShellScriptInfo(text) {
+        const value = text.trim();
+        const background = /^background:/i.test(value);
+        const scriptText = background
+            ? value.replace(/^background:\s*/i, '')
+            : value;
+        const match = scriptText.match(
             /(?:^|[\s"'=])([^\s"'|;&]*\.sh)(?=$|[\s"'|;&])/
         );
 
-        return match?.[1] ?? null;
+        if (!match)
+            return null;
+
+        return {
+            path: match[1],
+            background,
+        };
     }
 
     _isShellScript(text) {
-        return this._getShellScriptPath(text) !== null;
-    }
-
-    _isShellCommand(text) {
-        return text.includes('|');
+        return this._getShellScriptInfo(text) !== null;
     }
 
     _isJoplinLink(text) {

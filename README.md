@@ -43,9 +43,8 @@ For keys with three or more slash-separated blocks, search results show only the
 | 2 | Email | mail address or starts with `mailto:` | Open mail client |
 | 3 | Joplin | starts with `joplin://` | Open note link |
 | 4 | `pass` / `pass-<field>` / `otp` | value is `pass`, `pass-<field>`, or `otp` | Copy the password, a named field, or generate the OTP from the entry's `otpauth://` URI |
-| 5 | Shell script | contains a filename matching `*.sh` | Run that script in a terminal; the key is passed as its first argument |
-| 6 | Shell command | contains `|` | Run the command in a terminal |
-| 7 | Default / Fallback | any other value | Copy value to clipboard |
+| 5 | Shell script | contains a filename ending in `.sh` | Run in a terminal; use the `background:` prefix to run without a terminal |
+| 6 | Default / Fallback | any other value | Copy value to clipboard |
 
 ## Example 1 - URL
 Action: URL: open in default browser (value starts with http/https)
@@ -103,16 +102,13 @@ posteo.de|xdgopen.sh
 google.de|xdgopen.sh
 ```
 
-In this example, `xdgopen.sh` receives `posteo.de` or `google.de` as its first argument. A value that contains a shell pipeline, such as the next example, is run as a shell command instead.
-
-## Example 6 - Shell command
-Action: Run the value as a shell command in a terminal (value contains `|`):
+In this example, `xdgopen.sh` receives `posteo.de` or `google.de` as its first argument. Shell scripts are recognized by a filename ending in `.sh`; other values are copied to the clipboard. To run a script without opening a terminal, add the `background:` prefix:
 
 ```text
-neomutt|pass neomutt-start.sh | bash
+backup|background:backup.sh
 ```
 
-The command is run as written, so the pipeline feeds the output of `pass neomutt-start.sh` to `bash`.
+The script receives `backup` as its first argument. Its standard output and errors are appended to `~/.config/csv-search-provider/error.txt`.
 
 For shell script execution, the extension prefers `kitty` terminal emulator. If not installed, the default system terminal will be used. To install kitty:
 
@@ -126,12 +122,12 @@ sudo pacman -S kitty    # Arch Linux
 
 https://github.com/user-attachments/assets/cc335c64-00f2-4f14-892d-4e92b5ce0f2e
 
-## Example 7.1 - Default
+## Example 6.1 - Default
 Action: Default: copy value to clipboard (defaut)
 
 https://github.com/user-attachments/assets/01122675-b0c3-4a1a-b874-8348a6e42cb1
 
-## Example 7.2 - Default - Multiline
+## Example 6.2 - Default - Multiline
 Action: default copy with icon override when value contains `PGP MESSAGE`.
 Note: multiline values must not contain `|`.
 
