@@ -43,74 +43,155 @@ For keys with three or more slash-separated blocks, search results show only the
 | 2 | Email | mail address or starts with `mailto:` | Open mail client |
 | 3 | Joplin | starts with `joplin://` | Open note link |
 | 4 | `pass` / `pass-<field>` / `otp` | value is `pass`, `pass-<field>`, or `otp` | Copy the password, a named field, or generate the OTP from the entry's `otpauth://` URI |
-| 5 | Shell script | contains a filename ending in `.sh` | Run in a terminal; use the `background:` prefix to run without a terminal |
+| 5 | Shell command | contains a `.sh` filename, `bash`, or a shell pipeline | Run as a command; `background:` runs without a terminal |
 | 6 | Default / Fallback | any other value | Copy value to clipboard |
 
-## Example 1 - URL
-Action: URL: open in default browser (value starts with http/https)
+## Examples and video directions
 
-https://github.com/user-attachments/assets/f76c1272-cfa2-42ba-bda8-a1409a45de31
+The snippets below show the contents of a CSV/TXT file. Add them to a file in
+`~/.config/csv-search-provider`, then reload the extension. Each video direction
+is a short recording plan that can later be replaced with the finished video.
+Use a clean demo profile and test data; never show real passwords, OTP codes,
+private emails, or personal notes in a recording.
 
-## Example 2 - Email
-Action: Email: open mail client (value is a mail address or starts with mailto:)
-
-https://github.com/user-attachments/assets/4afd04f8-8740-4303-b93f-eb2c2f550fa0
-
-## Example 3 - Joplin
-Action: Joplin: open note link (value starts with joplin://)
-
-https://github.com/user-attachments/assets/6d50fc52-ada1-42fa-a0c2-9b12a259ab5c
-
-## Example 4.1 - pass
-Action: pass: run pass and copy result to clipboard (value is 'pass')
-
-https://github.com/user-attachments/assets/b4fe7c05-0000-4f26-bead-faab8bf1a41c
-
-## Example 4.2 - pass and otp
-
-A `pass` entry can contain the password on its first line and additional fields below it. Put the OTP URI on its own line, either directly or after `otp:`:
+### Example 1 - URL
 
 ```text
-Th3Gr3at3stPassw0rd
-username: JohnDoe
-email: john@example.com
-otp: otpauth://totp/example?secret=ABCDCBABCDCBABCD
-url: https://example.com
+Project website|https://github.com/stbaeumer/CSV-Search-Provider
+```
+
+**Action:** Opens the URL in the default browser.
+
+**Video direction:** Show the CSV row, open GNOME Shell search, type
+`Project website`, and activate the result. Record the browser opening the
+project page. Do not show unrelated browser tabs or personal bookmarks.
+
+### Example 2 - Email
+
+Both a plain email address and a `mailto:` value open the mail client:
+
+```text
+Project contact|hello@example.com
+Support contact|mailto:support@example.com
+```
+
+**Action:** Opens a new message in the default mail client; it does not send
+the message.
+
+**Video direction:** Search for `Project contact`, activate the result, and
+show the mail client with the recipient filled in. Do not type or send a
+message. Repeat with `Support contact` only if you want to demonstrate the
+`mailto:` form.
+
+### Example 3 - Joplin
+
+```text
+Demo note|joplin://x-callback-url/openNote?id=00000000000000000000000000000000
+```
+
+Replace the example ID with the ID of a disposable note in your Joplin
+installation.
+
+**Action:** Opens the note in Joplin.
+
+**Video direction:** Show the example row, search for `Demo note`, and activate
+the result. Capture Joplin opening the disposable note. Keep private notes and
+notebook names out of the recording.
+
+### Example 4 - Passwords, fields, and OTP
+
+A password-store entry contains the password on its first line and optional
+fields below it. For example, a test entry named `demo-login` could contain:
+
+```text
+EXAMPLE-ONLY-password
+username: demo-user
+email: demo@example.com
 pin: 1234
+application-password: EXAMPLE-ONLY-app-password
+otp: otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP
 ```
 
-The `otp:` prefix is optional; a line beginning directly with `otpauth://` works as well. In the CSV/TXT file, use the pass entry name with `pass` to copy its first line, `otp` to generate and copy a code from its TOTP URI, or `pass-<field>` to copy a named field:
+The URI above uses a public test secret; never use it for an actual account.
+The `otp:` prefix is optional if the password store's `pass-otp` extension is
+installed: a line beginning directly with `otpauth://` is also supported.
+
+Add these rows to the CSV/TXT file:
 
 ```text
-john.Doe|pass
-john.Doe|otp
-john.Doe|pass-pin
-john.Doe|pass-anwendungspasswort
+demo-login|pass
+demo-login|pass-username
+demo-login|pass-pin
+demo-login|pass-application-password
+demo-login|pass-missing-field
+demo-login|otp
+demo-login|otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP
 ```
 
-For `pass-<field>`, the extension copies the value after the matching `<field>:` line in the password entry (case-insensitive field name). For example, `pass-pin` copies `1234` from `pin: 1234`. If the field is missing, it copies `<field> does not exist in item` to the clipboard.
+`pass` copies the first line. `pass-<field>` copies the value after the
+matching field name (case-insensitive), so `pass-pin` copies `1234`. A missing
+field copies the text `<field> does not exist in item`. `otp` generates a TOTP
+code from the entry's URI and copies it. The final row is an alternate trigger
+for the same OTP action when the value itself starts with `otpauth://`. The
+clipboard is cleared automatically after a short time for passwords and OTP
+codes.
 
-Treat the password and OTP secret as highly sensitive. Anyone who obtains the OTP URI may be able to generate your codes.
+**Action:** Retrieves the matching entry using `pass show`, then copies the
+password, requested field, or OTP code to the clipboard.
 
-https://github.com/user-attachments/assets/90261af2-cace-4fd4-a3fa-0d00d731a03b
+**Video direction:** Use a disposable password-store entry containing only
+the test values above. Search for `demo-login`, activate `pass-pin`, and show
+the clipboard notification without revealing the copied value. Repeat with
+`otp` if desired; do not display or paste the generated code. Mention that
+`pass` and `oathtool` must be installed, and that direct `otpauth://` lines
+also require `pass-otp`.
 
-## Example 5 - Shell script
-Action: If the value contains a filename ending in `.sh`, that script is run in a terminal. The key (the part before the CSV delimiter) is passed as the script's first argument; it does not need to end in `.sh`:
+Treat passwords and OTP secrets as highly sensitive. Anyone who obtains an
+OTP URI may be able to generate its codes.
+
+### Example 5 - Shell scripts and commands
+
+A bare script filename receives the entry key as its first argument:
 
 ```text
 posteo.de|xdgopen.sh
 google.de|xdgopen.sh
-```
-
-In this example, `xdgopen.sh` receives `posteo.de` or `google.de` as its first argument. Shell scripts are recognized by a filename ending in `.sh`; other values are copied to the clipboard. To run a script without opening a terminal, add the `background:` prefix:
-
-```text
 backup|background:backup.sh
 ```
 
-The script receives `backup` as its first argument. Its standard output and errors are appended to `~/.config/csv-search-provider/error.txt`.
+The script must be available by name in `$PATH`, or use a script path instead.
+For example, `xdgopen.sh` receives `posteo.de` or `google.de`; the background
+script receives `backup`. Background output and errors are appended to
+`~/.config/csv-search-provider/error.txt`.
 
-For shell script execution, the extension prefers `kitty` terminal emulator. If not installed, the default system terminal will be used. To install kitty:
+A value containing a `.sh` filename, `bash`, or a pipe is run as a shell
+command. These examples demonstrate commands and pipelines:
+
+```text
+Show date|date | tee /tmp/csv-search-provider-date.txt
+Show date quietly|background:date | tee /tmp/csv-search-provider-date.txt
+uptime|pass scripts/uptime.sh | bash - hours
+uptime-range|pass scripts/uptime.sh | bash - minutes 15
+uptime-background|background:pass scripts/uptime.sh | bash - minutes 15
+```
+
+Arguments after `bash -` become `$1`, `$2`, and so on in the script. Quote
+arguments containing spaces as you would in a terminal. For background
+commands, output and errors are appended to
+`~/.config/csv-search-provider/error.txt`.
+
+**Action:** Runs a matching script or command. By default it opens a terminal;
+the `background:` prefix runs without one.
+
+**Video direction:** First show `Show date`, activate it, and capture the
+terminal displaying the date. Then search for `Show date quietly`, activate
+it, and show that no terminal opens. If demonstrating a script, use a harmless
+demo script that prints a message and its received arguments. Never run a
+command that changes or deletes files during recording.
+
+For commands that open a terminal, the extension prefers the `kitty` terminal
+emulator. If it is not installed, the default system terminal is used. To
+install kitty:
 
 ```bash
 sudo apt install kitty  # Debian/Ubuntu
@@ -120,18 +201,50 @@ sudo dnf install kitty  # Fedora
 sudo pacman -S kitty    # Arch Linux
 ```
 
-https://github.com/user-attachments/assets/cc335c64-00f2-4f14-892d-4e92b5ce0f2e
+### Example 6 - Default copy and multiline values
 
-## Example 6.1 - Default
-Action: Default: copy value to clipboard (defaut)
+Values that do not match another action are copied to the clipboard:
 
-https://github.com/user-attachments/assets/01122675-b0c3-4a1a-b874-8348a6e42cb1
+```text
+Guest Wi-Fi|Network: ExampleGuest; password: EXAMPLE-ONLY
+Meeting notes|First line of the note
+Second line of the note
+Third line of the note
+Demo PGP marker|-----BEGIN PGP MESSAGE-----
+[Demo placeholder; this is not an encrypted message]
+-----END PGP MESSAGE-----
+```
 
-## Example 6.2 - Default - Multiline
-Action: default copy with icon override when value contains `PGP MESSAGE`.
-Note: multiline values must not contain `|`.
+The multiline value belongs to the key on the line containing the first `|`.
+Continuation lines are kept as written. Do not put another `|` in a multiline
+value: it is reserved as the key/value separator. A value containing `PGP
+MESSAGE` uses the PGP icon by default.
 
-https://github.com/user-attachments/assets/106f6af4-c287-4ec0-bac8-a6021c805055
+**Action:** Copies the complete value, including any continuation lines, to
+the clipboard.
+
+**Video direction:** Search for `Meeting notes`, activate the result, and
+paste the value into a plain-text editor to show that all three lines were
+copied. Then search for `Demo PGP marker` and briefly show its result and PGP
+icon. Keep the placeholder label visible so viewers do not mistake it for
+real encrypted data.
+
+### Example 7 - Comments and long keys
+
+Lines starting with `#` are ignored, and keys with at least three slash-
+separated parts display only their last two parts. The complete key remains
+searchable:
+
+```text
+# A comment: this line is ignored
+work/accounts/example.com|https://example.com
+```
+
+**Video direction:** Show the comment and entry in the data file. Search for
+`work/accounts/example.com` and show that the result is displayed as
+`accounts/example.com`, then activate it to open the URL. This demonstrates
+that the full key can be searched even though the result uses a shorter
+display name.
 
 
 ## Comments
@@ -308,6 +421,8 @@ computer
 ```
 
 Thus, if both `github.com.png` and `computer.png` exist, `github.com.png` is used. Each name can use `.png`, `.jpg`, `.jpeg`, `.svg`, `.webp`, `.gif`, `.bmp`, or `.ico`, or have no extension. For each name, an image in `~/.config/csv-search-provider` takes precedence over one in `~/.local/share/icons`. For example:
+
+If a slash-separated key part contains multiple words separated by spaces, the full part is checked first, followed by each word from left to right. For example, `computer/my laptop` checks `my laptop` first, then `my`, then `laptop`, so `laptop.png` can provide the icon if no more specific match exists.
 
 ```text
 ~/.config/csv-search-provider/github.com.png
