@@ -165,19 +165,29 @@ script receives `backup`. Background output and errors are appended to
 `~/.config/csv-search-provider/error.txt`.
 
 A value containing a `.sh` filename, `bash`, or a pipe is run as a shell
-command. These examples demonstrate commands and pipelines:
+command. To pass the CSV key to the command, put `"$@"` exactly where its
+arguments should go. The key is split at whitespace, and each word becomes a
+separate argument. Without `"$@"`, the command receives no arguments from the
+CSV key. This lets you mix the key's words with fixed arguments or leave them
+out entirely:
 
 ```text
-Show date|date | tee /tmp/csv-search-provider-date.txt
-Show date quietly|background:date | tee /tmp/csv-search-provider-date.txt
-uptime|pass scripts/uptime.sh | bash - hours
-uptime-range|pass scripts/uptime.sh | bash - minutes 15
-uptime-background|background:pass scripts/uptime.sh | bash - minutes 15
+Show date|date | cat
+Show date quietly|background:date | cat
+Show arguments|printf 'argument=<%s>\n' "$@" | cat
+webuntis admin|pass skripte/xdgopen-otp | bash -s -- "$@"
+hours|pass scripts/uptime.sh | bash -s -- "$@"
+minutes 15|pass scripts/uptime.sh | bash -s -- "$@"
+minutes 15|background:pass scripts/uptime.sh | bash -s -- "$@"
 ```
 
-Arguments after `bash -` become `$1`, `$2`, and so on in the script. Quote
-arguments containing spaces as you would in a terminal. For background
-commands, output and errors are appended to
+In the `webuntis admin` example, the script receives `webuntis` as `$1` and
+`admin` as `$2`; the script's `for kw in $SEARCH_TERM` loop searches for both
+words. The `printf` example shows each key word as a separate argument.
+`bash -s -- "$@"` reads the script from standard input and forwards those
+arguments. You can put `"$@"` before or after fixed arguments to control their
+position; if the command does not contain `"$@"`, no CSV-key arguments are
+forwarded. For background commands, output and errors are appended to
 `~/.config/csv-search-provider/error.txt`.
 
 **Action:** Runs a matching script or command. By default it opens a terminal;

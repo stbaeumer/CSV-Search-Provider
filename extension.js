@@ -729,20 +729,30 @@ class CsvSearchProvider {
         this._openInTerminal(command, [scriptPath, parameter]);
     }
 
-    _openShellCommand(shellCommand) {
+    _getShellCommandParameters(shellCommand, key) {
+        if (!shellCommand.includes('$@'))
+            return [];
+
+        return key
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+    }
+
+    _openShellCommand(shellCommand, parameters) {
         const command = [
-            'bash -c "$1"; status=$?;',
+            'bash -c "$1" csv-search-provider "${@:2}"; status=$?;',
             "read -r -p 'Press Enter to exit...'; exit \"$status\";",
         ].join(' ');
 
-        this._openInTerminal(command, [shellCommand]);
+        this._openInTerminal(command, [shellCommand, ...parameters]);
     }
 
-    _runShellCommandInBackground(shellCommand) {
+    _runShellCommandInBackground(shellCommand, parameters) {
         try {
             const logPath = this._getBackgroundLogPath();
             const command = [
-                'bash -c "$1" >> "$2" 2>&1;',
+                'bash -c "$1" csv-search-provider "${@:3}" >> "$2" 2>&1;',
                 'status=$?;',
                 'if (( status != 0 )); then',
                 'printf "Shell command exited with status %s\\n" "$status" >> "$2";',
@@ -757,6 +767,7 @@ class CsvSearchProvider {
                 'csv-search-provider',
                 shellCommand,
                 logPath,
+                ...parameters,
             ]);
         } catch (error) {
             this._logError(error, 'run background shell command');
@@ -864,9 +875,20 @@ class CsvSearchProvider {
                     );
                 }
             } else if (shellAction.background) {
-                this._runShellCommandInBackground(shellAction.command);
+                const parameters = this._getShellCommandParameters(
+                    shellAction.command,
+                    entry.key
+                );
+                this._runShellCommandInBackground(
+                    shellAction.command,
+                    parameters
+                );
             } else {
-                this._openShellCommand(shellAction.command);
+                const parameters = this._getShellCommandParameters(
+                    shellAction.command,
+                    entry.key
+                );
+                this._openShellCommand(shellAction.command, parameters);
             }
         } else if (this._isUrl(content)) {
             this._openUrl(content);
