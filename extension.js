@@ -4,7 +4,6 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const CLIPBOARD_CLEAR_SECONDS = 20;
 const CUSTOM_ICON_EXTENSIONS = [
     '.png',
     '.jpg',
@@ -22,7 +21,11 @@ class CsvSearchProvider {
         this.id = extension.uuid;
         this._entries = [];
         this._dataDir = extension.path;
-        this._clipboardTimeoutId = 0;
+        this._passwordStoreDataDir = GLib.build_filenamev([
+            GLib.get_home_dir(),
+            'password-store',
+            'csv-search-provider',
+        ]);
     }
 
     enable() {
@@ -32,23 +35,12 @@ class CsvSearchProvider {
 
     disable() {
         Main.overview.searchController.removeProvider(this);
-
-        if (this._clipboardTimeoutId) {
-            GLib.Source.remove(this._clipboardTimeoutId);
-            this._clipboardTimeoutId = 0;
-        }
     }
 
     _getIconNameForContent(content) {
         switch (true) {
             case content.includes('PGP MESSAGE'):
                 return 'pgp.png';
-
-            case this._isOtpEntry(content):
-                return 'otp.png';
-
-            case this._isPassEntry(content):
-                return 'pass.png';
 
             case this._isJoplinLink(content):
                 return 'joplin.png';
@@ -78,6 +70,7 @@ class CsvSearchProvider {
                 GLib.get_user_config_dir(),
                 'csv-search-provider',
             ]),
+            this._passwordStoreDataDir,
         ];
 
         for (const dataDirPath of dataDirs) {
@@ -259,18 +252,29 @@ class CsvSearchProvider {
         if (customIcon)
             return customIcon;
 
-        const iconPath = GLib.build_filenamev([
-            this._extension.path,
-            'icons',
-            entry.iconName,
-        ]);
+        const iconDirs = [
+            GLib.build_filenamev([
+                this._passwordStoreDataDir,
+                'icons',
+            ]),
+            GLib.build_filenamev([
+                this._extension.path,
+                'icons',
+            ]),
+        ];
 
-        const file = Gio.File.new_for_path(iconPath);
+        for (const iconDir of iconDirs) {
+            const iconPath = GLib.build_filenamev([
+                iconDir,
+                entry.iconName,
+            ]);
+            const file = Gio.File.new_for_path(iconPath);
 
-        if (!file.query_exists(null))
-            return null;
+            if (file.query_exists(null))
+                return new Gio.FileIcon({ file });
+        }
 
-        return new Gio.FileIcon({ file });
+        return null;
     }
 
     _getCustomIconForEntry(entry) {
@@ -289,6 +293,10 @@ class CsvSearchProvider {
             GLib.build_filenamev([
                 GLib.get_user_config_dir(),
                 'csv-search-provider',
+            ]),
+            GLib.build_filenamev([
+                this._passwordStoreDataDir,
+                'icons',
             ]),
             GLib.build_filenamev([
                 GLib.get_user_data_dir(),
@@ -396,224 +404,11 @@ class CsvSearchProvider {
         return launcher.spawnv(args);
     }
 
-    async _runCommand(args, input = null) {
-        const process = this._spawnCommand(
-            args,
-            Gio.SubprocessFlags.STDOUT_PIPE |
-            (input !== null ? Gio.SubprocessFlags.STDIN_PIPE : 0) |
-            Gio.SubprocessFlags.STDERR_PIPE
-        );
-
-        const [, stdout, stderr] = await new Promise(
-            (resolve, reject) => {
-                process.communicate_utf8_async(
-                    input,
-                    null,
-                    (source, result) => {
-                        try {
-                            resolve(
-                                source.communicate_utf8_finish(result)
-                            );
-                        } catch (error) {
-                            reject(error);
-                        }
-                    }
-                );
-            }
-        );
-
-        if (!process.get_successful()) {
-            throw new Error(
-                stderr?.trim() || `Command failed: ${args[0]}`
-            );
-        }
-
-        return stdout ?? '';
-    }
-
     _logError(error, message) {
         logError(error, `CSV Search: ${message}`);
     }
 
-    async _copyPassToClipboard(passEntry) {
-        const entryName = passEntry.trim();
-
-        if (!entryName)
-            return;
-
-        try {
-            const output = await this._runCommand([
-                'pass',
-                'show',
-                entryName,
-            ]);
-
-            // The first line contains the password.
-            const password = output.split(/\r?\n/, 1)[0];
-
-            if (!password) {
-                this._logError(
-                    new Error('Empty password output.'),
-                    'copy pass entry'
-                );
-                return;
-            }
-
-            this._copyToClipboard(
-                password,
-                CLIPBOARD_CLEAR_SECONDS
-            );
-        } catch (error) {
-            this._logError(error, 'copy pass entry');
-
-            Main.notify(
-                'Password failed',
-                error.message || String(error)
-            );
-        }
-    }
-
-    async _copyPassFieldToClipboard(passEntry, fieldName) {
-        const entryName = passEntry.trim();
-
-        if (!entryName)
-            return;
-
-        try {
-            const output = await this._runCommand([
-                'pass',
-                'show',
-                entryName,
-            ]);
-            const fieldValue = output
-                .split(/\r?\n/)
-                .slice(1)
-                .map(line => {
-                    const separatorIndex = line.indexOf(':');
-
-                    if (separatorIndex === -1 ||
-                        line.slice(0, separatorIndex).trim().toLowerCase() !==
-                            fieldName.toLowerCase()) {
-                        return null;
-                    }
-
-                    return line.slice(separatorIndex + 1).trim();
-                })
-                .find(value => value !== null);
-
-            this._copyToClipboard(
-                fieldValue ?? `${fieldName} does not exist in item`,
-                fieldValue === undefined ? 0 : CLIPBOARD_CLEAR_SECONDS
-            );
-        } catch (error) {
-            this._logError(error, `copy pass field ${fieldName}`);
-
-            Main.notify(
-                'Password field failed',
-                error.message || String(error)
-            );
-        }
-    }
-
-    async _copyOtpToClipboard(otpEntry) {
-        const entryName = otpEntry.trim();
-
-        if (!entryName)
-            return;
-
-        try {
-            const passOutput = await this._runCommand([
-                'pass',
-                'show',
-                entryName,
-            ]);
-            const otpUriLine = passOutput
-                .split(/\r?\n/)
-                .map(line => line.trim())
-                .find(line => /^(?:otp:\s*)?otpauth:\/\//i.test(line));
-
-            const output = otpUriLine &&
-                !otpUriLine.toLowerCase().startsWith('otpauth://')
-                ? await this._generateOtpFromUri(
-                    otpUriLine.replace(/^otp:\s*/i, '')
-                )
-                : await this._runCommand([
-                    'pass',
-                    'otp',
-                    entryName,
-                ]);
-
-            const otp = output.trim();
-
-            if (!otp)
-                throw new Error('pass otp returned no OTP code.');
-
-            this._copyToClipboard(
-                otp,
-                CLIPBOARD_CLEAR_SECONDS
-            );
-        } catch (error) {
-            this._logError(error, 'copy OTP');
-
-            Main.notify(
-                'OTP failed',
-                error.message || String(error)
-            );
-        }
-    }
-
-    async _generateOtpFromUri(uri) {
-        let parsedUri;
-
-        try {
-            parsedUri = new URL(uri);
-        } catch (_error) {
-            throw new Error('The pass entry contains an invalid OTP URI.');
-        }
-
-        if (parsedUri.protocol !== 'otpauth:' ||
-            parsedUri.hostname.toLowerCase() !== 'totp') {
-            throw new Error(
-                'Only TOTP URIs with an otp: prefix are supported.'
-            );
-        }
-
-        const parameters = parsedUri.searchParams;
-        const secret = parameters.get('secret');
-
-        if (!secret)
-            throw new Error('The OTP URI does not contain a secret.');
-
-        const args = ['oathtool', '--base32'];
-        const algorithm = parameters.get('algorithm');
-
-        if (algorithm)
-            args.push(`--totp=${algorithm.toLowerCase()}`);
-        else
-            args.push('--totp');
-
-        const period = parameters.get('period');
-
-        if (period) {
-            if (!/^\d+$/.test(period))
-                throw new Error('The OTP URI contains an invalid period.');
-
-            args.push(`--time-step-size=${period}s`);
-        }
-
-        const digits = parameters.get('digits');
-
-        if (digits) {
-            if (!/^\d+$/.test(digits))
-                throw new Error('The OTP URI contains an invalid digit count.');
-
-            args.push(`--digits=${digits}`);
-        }
-
-        return this._runCommand(args.concat('-'), secret);
-    }
-
-    _copyToClipboard(text, clearAfterSeconds = 0) {
+    _copyToClipboard(text) {
         try {
             const clipboard = St.Clipboard.get_default();
 
@@ -626,36 +421,6 @@ class CsvSearchProvider {
                 'Copied to clipboard',
                 'Content copied to clipboard.'
             );
-
-            if (this._clipboardTimeoutId) {
-                GLib.Source.remove(this._clipboardTimeoutId);
-                this._clipboardTimeoutId = 0;
-            }
-
-            if (clearAfterSeconds > 0) {
-                this._clipboardTimeoutId = GLib.timeout_add_seconds(
-                    GLib.PRIORITY_DEFAULT,
-                    clearAfterSeconds,
-                    () => {
-                        this._clipboardTimeoutId = 0;
-
-                        // Do not erase newer clipboard contents.
-                        clipboard.get_text(
-                            St.ClipboardType.CLIPBOARD,
-                            (_clipboard, currentText) => {
-                                if (currentText === text) {
-                                    clipboard.set_text(
-                                        St.ClipboardType.CLIPBOARD,
-                                        ''
-                                    );
-                                }
-                            }
-                        );
-
-                        return GLib.SOURCE_REMOVE;
-                    }
-                );
-            }
         } catch (error) {
             this._logError(error, 'copy to clipboard');
         }
@@ -846,20 +611,7 @@ class CsvSearchProvider {
         const content = entry.url;
         const shellAction = this._getShellActionInfo(content);
 
-        if (this._isOtpEntry(content)) {
-            this._copyOtpToClipboard(entry.key);
-        } else if (this._isPassEntry(content)) {
-            const fieldName = this._getPassField(content);
-
-            if (fieldName) {
-                this._copyPassFieldToClipboard(
-                    entry.key,
-                    fieldName
-                );
-            } else {
-                this._copyPassToClipboard(entry.key);
-            }
-        } else if (this._isJoplinLink(content)) {
+        if (this._isJoplinLink(content)) {
             this._openJoplinLink(content);
         } else if (shellAction) {
             if (shellAction.simpleScript) {
@@ -963,28 +715,6 @@ class CsvSearchProvider {
 
     _isJoplinLink(text) {
         return text.trim().startsWith('joplin://');
-    }
-
-    _isPassEntry(text) {
-        return text.trim().toLowerCase() === 'pass' ||
-            this._getPassField(text) !== null;
-    }
-
-    _getPassField(text) {
-        const value = text.trim();
-
-        if (!value.toLowerCase().startsWith('pass-'))
-            return null;
-
-        const fieldName = value.slice('pass-'.length).trim();
-
-        return fieldName || null;
-    }
-
-    _isOtpEntry(text) {
-        const value = text.trim();
-
-        return value === 'otp' || value.startsWith('otpauth');
     }
 
     getName() {

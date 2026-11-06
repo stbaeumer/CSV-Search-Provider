@@ -33,8 +33,6 @@ key|value
 
 Continuation lines in multiline values are kept as written.
 
-For keys with three or more slash-separated blocks, search results show only the last two blocks. The complete key is still used for searching and actions. For example, `dienste/cloud/posteo.de/baeumer` is displayed as `posteo.de/baeumer`.
-
 ### Actions
 
 | Nr | Type | Value | Action |
@@ -42,17 +40,16 @@ For keys with three or more slash-separated blocks, search results show only the
 | 1 | URL | starts with `http://` or `https://` | Open in default browser |
 | 2 | Email | mail address or starts with `mailto:` | Open mail client |
 | 3 | Joplin | starts with `joplin://` | Open note link |
-| 4 | `pass` / `pass-<field>` / `otp` | value is `pass`, `pass-<field>`, or `otp` | Copy the password, a named field, or generate the OTP from the entry's `otpauth://` URI |
-| 5 | Shell command | contains a `.sh` filename, `bash`, or a shell pipeline | Run as a command; `background:` runs without a terminal |
-| 6 | Default / Fallback | any other value | Copy value to clipboard |
+| 4 | Shell command | contains a `.sh` filename, `bash`, or a shell pipeline | Run as a command; `background:` runs without a terminal |
+| 5 | Default | any other value | Copy value to clipboard |
 
 ## Examples and video directions
 
 The snippets below show the contents of a CSV/TXT file. Add them to a file in
 `~/.config/csv-search-provider`, then reload the extension. Each video direction
 is a short recording plan that can later be replaced with the finished video.
-Use a clean demo profile and test data; never show real passwords, OTP codes,
-private emails, or personal notes in a recording.
+Use a clean demo profile and test data; never show private emails or personal
+notes in a recording.
 
 ### Example 1 - URL
 
@@ -98,58 +95,7 @@ installation.
 the result. Capture Joplin opening the disposable note. Keep private notes and
 notebook names out of the recording.
 
-### Example 4 - Passwords, fields, and OTP
-
-A password-store entry contains the password on its first line and optional
-fields below it. For example, a test entry named `demo-login` could contain:
-
-```text
-EXAMPLE-ONLY-password
-username: demo-user
-email: demo@example.com
-pin: 1234
-application-password: EXAMPLE-ONLY-app-password
-otp: otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP
-```
-
-The URI above uses a public test secret; never use it for an actual account.
-The `otp:` prefix is optional if the password store's `pass-otp` extension is
-installed: a line beginning directly with `otpauth://` is also supported.
-
-Add these rows to the CSV/TXT file:
-
-```text
-demo-login|pass
-demo-login|pass-username
-demo-login|pass-pin
-demo-login|pass-application-password
-demo-login|pass-missing-field
-demo-login|otp
-demo-login|otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP
-```
-
-`pass` copies the first line. `pass-<field>` copies the value after the
-matching field name (case-insensitive), so `pass-pin` copies `1234`. A missing
-field copies the text `<field> does not exist in item`. `otp` generates a TOTP
-code from the entry's URI and copies it. The final row is an alternate trigger
-for the same OTP action when the value itself starts with `otpauth://`. The
-clipboard is cleared automatically after a short time for passwords and OTP
-codes.
-
-**Action:** Retrieves the matching entry using `pass show`, then copies the
-password, requested field, or OTP code to the clipboard.
-
-**Video direction:** Use a disposable password-store entry containing only
-the test values above. Search for `demo-login`, activate `pass-pin`, and show
-the clipboard notification without revealing the copied value. Repeat with
-`otp` if desired; do not display or paste the generated code. Mention that
-`pass` and `oathtool` must be installed, and that direct `otpauth://` lines
-also require `pass-otp`.
-
-Treat passwords and OTP secrets as highly sensitive. Anyone who obtains an
-OTP URI may be able to generate its codes.
-
-### Example 5 - Shell scripts and commands
+### Example 4 - Shell scripts and commands
 
 A bare script filename receives the entry key as its first argument:
 
@@ -211,7 +157,7 @@ sudo dnf install kitty  # Fedora
 sudo pacman -S kitty    # Arch Linux
 ```
 
-### Example 6 - Default copy and multiline values
+### Example 5 - Default copy and multiline values
 
 Values that do not match another action are copied to the clipboard:
 
@@ -239,7 +185,7 @@ copied. Then search for `Demo PGP marker` and briefly show its result and PGP
 icon. Keep the placeholder label visible so viewers do not mistake it for
 real encrypted data.
 
-### Example 7 - Comments and long keys
+### Example 6 - Comments and long keys
 
 Lines starting with `#` are ignored, and keys with at least three slash-
 separated parts display only their last two parts. The complete key remains
@@ -277,15 +223,15 @@ Simply toggle the extension off and on again in the extension manager. The new l
 ./csv-search-provider.sh debug
 ```
 
+For keys with three or more slash-separated blocks, search results show only the last two blocks. The complete key is still used for searching and actions. For example, `dienste/cloud/posteo.de/baeumer` is displayed as `posteo.de/baeumer`.
+
+
 ## Troubleshooting
 
-- **pass/otp not found**: Install `pass` and `oathtool`; both commands must be in `$PATH`. The `pass-otp` extension is also needed for entries whose URI starts directly with `otpauth://`.
-- **OTP does nothing**: Check that the matching password-store entry contains an `otpauth://` URI. A URI on a line starting with `otp:` requires `oathtool`; a URI on a line starting directly with `otpauth://` requires the `pass-otp` extension. The extension shows an error notification if OTP generation fails.
 - **Default terminal missing**: Install `x-terminal-emulator` or the extension will use no terminal for shell scripts. Prefer `kitty` for best experience.
 - **xdg-open not working**: Some URI schemes may not be configured. Set up default applications in system settings.
 - **No results**: Ensure CSV/TXT files are in the extension directory. Comments (lines starting with `#`) are ignored. Re-installation might erase csv-files.
 - **Multiline values fail**: Avoid using `|` inside multiline values; use it only as field separator.
-- **not in the password-store**: Try `ln -s "$HOME/.passify" "$HOME/.password-store"`, if using different location.
 
 ## Tips & tricks
 
@@ -341,60 +287,6 @@ entry_count=$(wc -l < "$CSV_FILE" | tr -d ' ')
 echo "✅ Successfully exported $entry_count Joplin notes to: $CSV_FILE"
 ```
 
-### Create generate-pass-csv.sh
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Configuration
-CONFIG_DIR="$HOME/.config/csv-search-provider"
-CSV_FILE="$CONFIG_DIR/pass.csv"
-PASSWORD_STORE_DIR="$HOME/.password-store"
-
-# Check if the password store directory exists
-if [ ! -d "$PASSWORD_STORE_DIR" ]; then
-    echo "❌ Error: Password store not found at $PASSWORD_STORE_DIR." >&2
-    exit 1
-fi
-
-# Create target directory if it doesn't exist
-mkdir -p "$CONFIG_DIR"
-
-echo "📝 Creating CSV file: $CSV_FILE"
-echo "name|pass" > "$CSV_FILE"
-
-echo "🔍 Searching password store..."
-
-# Safe loop for file names (handles paths with spaces properly)
-while IFS= read -r -d '' file; do
-    # Strip the base path and .gpg extension to get the entry name
-    entry="${file#$PASSWORD_STORE_DIR/}"
-    entry="${entry%.gpg}"
-    
-    # Retrieve content from pass (suppress stderr errors)
-    if ! content=$(pass show "$entry" 2>/dev/null); then
-        echo "⚠️  Could not read entry: $entry"
-        continue
-    fi
-    
-    if echo "$content" | grep -q "otpauth://"; then
-        echo "🔐 OTP found: $entry"
-        echo "$entry|otp" >> "$CSV_FILE"
-    else
-        password=$(echo "$content" | head -n 1)
-        if [ -n "$password" ]; then
-            echo "🔑 Password found: $entry"
-            echo "$entry|pass" >> "$CSV_FILE"
-        else
-            echo "⏭️  Skipped empty: $entry"
-        fi
-    fi
-done < <(find "$PASSWORD_STORE_DIR" -type f -name "*.gpg" -print0)
-
-echo "✅ CSV file successfully created at: $CSV_FILE"
-```
-
 ### Change icons
 
 To use your own icons, replace the PNG files in the extension's `icons` folder. Keep the existing filenames so the extension can find them. The folder is usually:
@@ -408,8 +300,6 @@ The icon is selected automatically based on the value in the CSV/TXT entry. Repl
 | Entry type | Icon file |
 |------------|-----------|
 | PGP message | `pgp.png` |
-| OTP | `otp.png` |
-| Password (`pass`) | `pass.png` |
 | Joplin link | `joplin.png` |
 | URL containing `team` | `teams.png` |
 | Other URL | `browser.png` |
@@ -421,7 +311,7 @@ Use PNG images and retain the filenames shown above. After replacing an icon, re
 
 ### Per-entry icons
 
-You can override the standard icon for a CSV/TXT entry by adding an image named after one of the slash-separated parts of its key. The parts are checked from right to left, from specific to general. For `computer/repositories/github.com/github|otp`, the search order is:
+You can override the standard icon for a CSV/TXT entry by adding an image named after one of the slash-separated parts of its key. The parts are checked from right to left, from specific to general. For `computer/repositories/github.com/github|https://github.com`, the search order is:
 
 ```text
 github
